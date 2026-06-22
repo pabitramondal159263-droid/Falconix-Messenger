@@ -52,7 +52,6 @@
             overflow: hidden; 
         }
 
-        /* Glassmorphism Utilities */
         .glass-panel {
             background: var(--glass-bg-dark);
             backdrop-filter: blur(24px); 
@@ -61,7 +60,6 @@
             box-shadow: var(--glass-shadow);
         }
 
-        /* MODULE: css/animation.css */
         @keyframes slideUpFade {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -70,23 +68,19 @@
             animation: slideUpFade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
-        /* Context Menu Utilities */
         .context-menu-active { pointer-events: auto; opacity: 1; transform: scale(1); }
         .context-menu-hidden { pointer-events: none; opacity: 0; transform: scale(0.95); }
         
-        /* Modal Utilities */
         .modal-active { opacity: 1; pointer-events: auto; }
         .modal-hidden { opacity: 0; pointer-events: none; }
         .modal-content-active { transform: scale(1) translateY(0); }
         .modal-content-hidden { transform: scale(0.95) translateY(20px); }
 
-        /* Audio Player Customization */
         audio { height: 36px; border-radius: 20px; outline: none; }
         audio::-webkit-media-controls-panel { background-color: rgba(255, 255, 255, 0.1); }
         audio::-webkit-media-controls-current-time-display, audio::-webkit-media-controls-time-remaining-display { color: #fff; }
@@ -104,9 +98,6 @@
             getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // ==========================================
-        // MODULE: utils/constants.js & utils/helpers.js
-        // ==========================================
         const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'falconix-messenger-v1';
         const FIREBASE_PATHS = {
             USERS: `artifacts/${APP_ID}/public/data/users`,
@@ -116,36 +107,35 @@
         };
 
         const Helpers = {
-            getConversationId(uid1, uid2) {
-                return [uid1, uid2].sort().join('_');
-            },
+            getConversationId(uid1, uid2) { return [uid1, uid2].sort().join('_'); },
             formatBytes(bytes, decimals = 2) {
                 if (!+bytes) return '0 Bytes';
-                const k = 1024;
-                const dm = decimals < 0 ? 0 : decimals;
+                const k = 1024; const dm = decimals < 0 ? 0 : decimals;
                 const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
                 const i = Math.floor(Math.log(bytes) / Math.log(k));
                 return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+            },
+            async generateSafetyNumber(pubKey1, pubKey2) {
+                const sortedKeys = [pubKey1, pubKey2].sort().join('');
+                const data = new TextEncoder().encode(sortedKeys);
+                const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                let numericString = '';
+                for(let i=0; i<hashArray.length; i++) numericString += hashArray[i].toString().padStart(3, '0');
+                return numericString.substring(0, 30).match(/.{1,5}/g).join(' ');
             }
         };
 
-        // ==========================================
-        // MODULE: ui/toast.js
-        // ==========================================
         class ToastManager {
             static show(message, type = 'success') {
                 const container = document.getElementById('toast-container');
                 const toast = document.createElement('div');
                 const bgColor = type === 'error' ? 'bg-red-500/90' : 'bg-emerald-500/90';
-                
                 toast.className = `p-4 mb-3 rounded-xl shadow-lg text-white text-sm font-medium backdrop-blur-md animate-slide-up border border-white/10 ${bgColor}`;
                 toast.textContent = message;
-                
                 container.appendChild(toast);
-                
                 setTimeout(() => {
-                    toast.style.opacity = '0';
-                    toast.style.transform = 'translateY(-10px) scale(0.95)';
+                    toast.style.opacity = '0'; toast.style.transform = 'translateY(-10px) scale(0.95)';
                     toast.style.transition = 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
                     setTimeout(() => toast.remove(), 300);
                 }, 4500);
@@ -153,37 +143,21 @@
         }
         window.ToastManager = ToastManager;
 
-        // ==========================================
-        // MODULE: crypto/encoding.js
-        // ==========================================
         const CryptoEncoding = {
             bufferToBase64(buffer) {
-                let binary = '';
-                const bytes = new Uint8Array(buffer);
-                const chunkSize = 8192;
-                for (let i = 0; i < bytes.byteLength; i += chunkSize) {
-                    const chunk = bytes.subarray(i, i + chunkSize);
-                    binary += String.fromCharCode.apply(null, chunk);
-                }
+                let binary = ''; const bytes = new Uint8Array(buffer); const chunkSize = 8192;
+                for (let i = 0; i < bytes.byteLength; i += chunkSize) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
                 return window.btoa(binary);
             },
             base64ToBuffer(base64) {
-                const binary_string = window.atob(base64);
-                const bytes = new Uint8Array(binary_string.length);
-                for (let i = 0; i < binary_string.length; i++) {
-                    bytes[i] = binary_string.charCodeAt(i);
-                }
+                const binary_string = window.atob(base64); const bytes = new Uint8Array(binary_string.length);
+                for (let i = 0; i < binary_string.length; i++) bytes[i] = binary_string.charCodeAt(i);
                 return bytes.buffer;
             }
         };
 
-        // ==========================================
-        // MODULE: crypto/rsa.js & aes.js & keyManager.js
-        // ==========================================
         const RSA = {
-            async generateKeyPair() {
-                return await window.crypto.subtle.generateKey({ name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["encrypt", "decrypt"]);
-            },
+            async generateKeyPair() { return await window.crypto.subtle.generateKey({ name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["encrypt", "decrypt"]); },
             async exportPublicKey(key) { return CryptoEncoding.bufferToBase64(await window.crypto.subtle.exportKey("spki", key)); },
             async exportPrivateKey(key) { return CryptoEncoding.bufferToBase64(await window.crypto.subtle.exportKey("pkcs8", key)); },
             async importPublicKey(b64) { return await window.crypto.subtle.importKey("spki", CryptoEncoding.base64ToBuffer(b64), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]); },
@@ -219,11 +193,8 @@
             async initDB() {
                 return new Promise((resolve, reject) => {
                     const req = indexedDB.open("FalconixSecureStore", 1);
-                    req.onerror = e => reject(e);
-                    req.onsuccess = e => resolve(e.target.result);
-                    req.onupgradeneeded = e => {
-                        if (!e.target.result.objectStoreNames.contains("user_keys")) e.target.result.createObjectStore("user_keys", { keyPath: "uid" });
-                    };
+                    req.onerror = e => reject(e); req.onsuccess = e => resolve(e.target.result);
+                    req.onupgradeneeded = e => { if (!e.target.result.objectStoreNames.contains("user_keys")) e.target.result.createObjectStore("user_keys", { keyPath: "uid" }); };
                 });
             },
             async saveKeysLocally(uid, priv, pub) {
@@ -242,44 +213,23 @@
             }
         };
 
-        // ==========================================
-        // MODULE: settings/wallpaper.js
-        // ==========================================
         const WallpaperService = {
-            save(convId, value) {
-                localStorage.setItem(`falconix_wp_${convId}`, value);
-                this.apply(convId);
-            },
+            save(convId, value) { localStorage.setItem(`falconix_wp_${convId}`, value); this.apply(convId); },
             apply(convId) {
                 const bg = localStorage.getItem(`falconix_wp_${convId}`);
                 const chatArea = document.getElementById('chat-active');
                 if (!chatArea) return;
-                
-                chatArea.style.backgroundImage = 'none';
-                chatArea.style.backgroundColor = 'transparent';
-
+                chatArea.style.backgroundImage = 'none'; chatArea.style.backgroundColor = 'transparent';
                 if (bg) {
-                    if (bg.startsWith('data:image')) {
-                        chatArea.style.backgroundImage = `url(${bg})`;
-                        chatArea.style.backgroundSize = 'cover';
-                        chatArea.style.backgroundPosition = 'center';
-                    } else if (bg.startsWith('linear-gradient') || bg.startsWith('radial-gradient')) {
-                        chatArea.style.backgroundImage = bg;
-                    } else {
-                        chatArea.style.backgroundColor = bg;
-                    }
+                    if (bg.startsWith('data:image')) { chatArea.style.backgroundImage = `url(${bg})`; chatArea.style.backgroundSize = 'cover'; chatArea.style.backgroundPosition = 'center'; } 
+                    else if (bg.startsWith('linear-gradient') || bg.startsWith('radial-gradient')) chatArea.style.backgroundImage = bg;
+                    else chatArea.style.backgroundColor = bg;
                 }
             },
-            clear(convId) {
-                localStorage.removeItem(`falconix_wp_${convId}`);
-                this.apply(convId);
-            }
+            clear(convId) { localStorage.removeItem(`falconix_wp_${convId}`); this.apply(convId); }
         };
         window.WallpaperService = WallpaperService;
 
-        // ==========================================
-        // MODULE: firebase/firebase.js
-        // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyCtZS3YscLwQ042gQsib8gCatIE5wLs808",
             authDomain: "falconixmessenger.firebaseapp.com",
@@ -300,18 +250,13 @@
             }
         };
 
-        // ==========================================
-        // MODULE: state/store.js
-        // ==========================================
         const AppState = {
-            currentUser: null, users: [], selectedUser: null,
+            currentUser: null, users: [], selectedUser: null, localKeys: null,
             unsubscribeUsers: null, unsubscribeMessages: null, unsubscribeConv: null,
-            replyToMsg: null, editingMsgId: null
+            replyToMsg: null, editingMsgId: null,
+            disappearingTimerMs: 0 
         };
 
-        // ==========================================
-        // MODULE: firebase/firestore.js
-        // ==========================================
         const DataService = {
             async updatePresence(db, uid, isOnline) {
                 try { await updateDoc(doc(db, FIREBASE_PATHS.USERS, uid), { isOnline, lastSeen: serverTimestamp() }); } catch (e) {}
@@ -335,25 +280,23 @@
                 if (AppState.unsubscribeConv) AppState.unsubscribeConv();
                 AppState.unsubscribeConv = onSnapshot(doc(db, FIREBASE_PATHS.CONVERSATIONS, convId), (docSnap) => {
                     if (docSnap.exists()) callback(docSnap.data());
+                    else callback(null);
                 });
             },
             async markMessageRead(db, convId, msgId) {
                 try { await updateDoc(doc(db, FIREBASE_PATHS.MESSAGES(convId), msgId), { status: 'read' }); } catch (e) {}
             },
             async deleteMessage(db, convId, msgId) {
-                try {
-                    await deleteDoc(doc(db, FIREBASE_PATHS.MESSAGES(convId), msgId));
-                    ToastManager.show("Message purged from network.", "success");
-                } catch (e) { ToastManager.show("Failed to purge message.", "error"); }
+                try { await deleteDoc(doc(db, FIREBASE_PATHS.MESSAGES(convId), msgId)); } catch (e) {}
             },
             async reactToMessage(db, convId, msgId, emoji) {
                 try { await updateDoc(doc(db, FIREBASE_PATHS.MESSAGES(convId), msgId), { [`reactions.${AppState.currentUser.uid}`]: emoji }); } catch (e) {}
+            },
+            async setDisappearingTimer(db, convId, timerMs) {
+                try { await setDoc(doc(db, FIREBASE_PATHS.CONVERSATIONS, convId), { disappearing: timerMs }, { merge: true }); } catch (e) {}
             }
         };
 
-        // ==========================================
-        // MODULE: chat/chat.js
-        // ==========================================
         const ChatService = {
             async setTyping(db, recipientUid, isTyping) {
                 if (!AppState.currentUser) return;
@@ -376,8 +319,7 @@
                     const recipientPubKey = await RSA.importPublicKey(recipientUser.publicKey);
                     const encryptedAesKeyB64 = await RSA.encryptData(recipientPubKey, rawAesKeyBuffer);
 
-                    const localKeys = await KeyManager.getKeysLocally(AppState.currentUser.uid);
-                    const senderPubKey = await RSA.importPublicKey(localKeys.publicKeyB64);
+                    const senderPubKey = await RSA.importPublicKey(AppState.localKeys.publicKeyB64);
                     const senderEncryptedAesKeyB64 = await RSA.encryptData(senderPubKey, rawAesKeyBuffer);
                     
                     const payload = {
@@ -386,6 +328,11 @@
                         encryptedAesKey: encryptedAesKeyB64, senderEncryptedAesKey: senderEncryptedAesKeyB64,
                         status: 'sent' 
                     };
+                    
+                    // Attach Expiration if Disappearing Messages are active
+                    if (AppState.disappearingTimerMs > 0) {
+                        payload.expiresAt = Date.now() + AppState.disappearingTimerMs;
+                    }
                     
                     await addDoc(collection(db, FIREBASE_PATHS.MESSAGES(Helpers.getConversationId(AppState.currentUser.uid, recipientUser.uid))), payload);
                 } catch (error) { ToastManager.show("Encryption fault.", "error"); }
@@ -400,8 +347,7 @@
                     const recipientPubKey = await RSA.importPublicKey(recipientUser.publicKey);
                     const encryptedAesKeyB64 = await RSA.encryptData(recipientPubKey, rawAesKeyBuffer);
 
-                    const localKeys = await KeyManager.getKeysLocally(AppState.currentUser.uid);
-                    const senderPubKey = await RSA.importPublicKey(localKeys.publicKeyB64);
+                    const senderPubKey = await RSA.importPublicKey(AppState.localKeys.publicKeyB64);
                     const senderEncryptedAesKeyB64 = await RSA.encryptData(senderPubKey, rawAesKeyBuffer);
 
                     await updateDoc(doc(db, FIREBASE_PATHS.MESSAGES(Helpers.getConversationId(AppState.currentUser.uid, recipientUser.uid)), msgId), {
@@ -424,8 +370,7 @@
                     const recipientPubKey = await RSA.importPublicKey(recipientUser.publicKey);
                     const encryptedAesKeyB64 = await RSA.encryptData(recipientPubKey, rawAesKeyBuffer);
 
-                    const localKeys = await KeyManager.getKeysLocally(AppState.currentUser.uid);
-                    const senderPubKey = await RSA.importPublicKey(localKeys.publicKeyB64);
+                    const senderPubKey = await RSA.importPublicKey(AppState.localKeys.publicKeyB64);
                     const senderEncryptedAesKeyB64 = await RSA.encryptData(senderPubKey, rawAesKeyBuffer);
                     
                     const encryptedBase64File = CryptoEncoding.bufferToBase64(ciphertextBuffer);
@@ -437,20 +382,30 @@
                         status: 'sent'
                     };
                     
+                    if (AppState.disappearingTimerMs > 0) payload.expiresAt = Date.now() + AppState.disappearingTimerMs;
+                    
                     await addDoc(collection(db, FIREBASE_PATHS.MESSAGES(Helpers.getConversationId(AppState.currentUser.uid, recipientUser.uid))), payload);
                 } catch (error) { ToastManager.show("Secure transfer failed.", "error"); }
             },
             async handleMessagesSnapshot(messages) {
                 const list = document.getElementById('chat-message-list');
-                const localKeys = await KeyManager.getKeysLocally(AppState.currentUser.uid);
-                if (!localKeys) return;
+                if (!AppState.localKeys) return;
                 
-                const privateKey = await RSA.importPrivateKey(localKeys.privateKeyB64);
+                const privateKey = await RSA.importPrivateKey(AppState.localKeys.privateKeyB64);
                 list.innerHTML = ''; 
                 
                 if (messages.length === 0) return;
 
+                const convId = AppState.selectedUser ? Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid) : null;
+                const now = Date.now();
+
                 for (const msg of messages) {
+                    // Check for Expiration
+                    if (msg.expiresAt && msg.expiresAt < now) {
+                        DataService.deleteMessage(db, convId, msg.id); // Aggressive Cleanup
+                        continue; 
+                    }
+
                     try {
                         const targetEncryptedAesKey = msg.senderUid === AppState.currentUser.uid ? msg.senderEncryptedAesKey : msg.encryptedAesKey;
                         let decryptedText = ""; let fileData = null;
@@ -471,11 +426,12 @@
                             id: msg.id, text: decryptedText, timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(),
                             isSelf: msg.senderUid === AppState.currentUser.uid,
                             status: msg.status || 'sent', fileData: fileData,
-                            isEdited: msg.isEdited, reactions: msg.reactions || {}
+                            isEdited: msg.isEdited, reactions: msg.reactions || {},
+                            expiresAt: msg.expiresAt || null
                         });
 
                         if (msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') {
-                            DataService.markMessageRead(db, Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid), msg.id);
+                            DataService.markMessageRead(db, convId, msg.id);
                         }
                     } catch (err) {
                         UI.appendMessage({
@@ -487,11 +443,27 @@
             }
         };
 
-        // ==========================================
-        // MODULE: ui/sidebar.js & ui/chat.js
-        // ==========================================
         const UI = {
             activeContextMenuParams: null,
+
+            openMobileChat() {
+                const sidebar = document.getElementById('app-sidebar');
+                const chatArea = document.getElementById('app-chat-area');
+                if(sidebar && chatArea) {
+                    sidebar.classList.remove('flex'); sidebar.classList.add('hidden', 'sm:flex');
+                    chatArea.classList.remove('hidden', 'sm:flex'); chatArea.classList.add('flex', 'w-full');
+                }
+            },
+
+            closeMobileChat() {
+                const sidebar = document.getElementById('app-sidebar');
+                const chatArea = document.getElementById('app-chat-area');
+                if(sidebar && chatArea) {
+                    sidebar.classList.remove('hidden', 'sm:flex'); sidebar.classList.add('flex');
+                    chatArea.classList.remove('flex', 'w-full'); chatArea.classList.add('hidden', 'sm:flex');
+                }
+                AppState.selectedUser = null; this.clearInputBanners();
+            },
 
             renderUserList(users) {
                 const listContainer = document.getElementById('sidebar-user-list');
@@ -540,15 +512,29 @@
                 }
             },
 
+            updateDisappearingBanner() {
+                const banner = document.getElementById('disappearing-banner');
+                if (AppState.disappearingTimerMs > 0) {
+                    let label = 'Active';
+                    if (AppState.disappearingTimerMs === 60000) label = '1 Min';
+                    else if (AppState.disappearingTimerMs === 3600000) label = '1 Hr';
+                    else if (AppState.disappearingTimerMs === 86400000) label = '24 Hr';
+                    
+                    banner.innerHTML = `<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Disappearing (${label})`;
+                    banner.classList.remove('hidden');
+                } else {
+                    banner.classList.add('hidden');
+                }
+            },
+
             selectUser(user) {
                 AppState.selectedUser = user;
                 document.getElementById('chat-placeholder').classList.add('hidden');
                 document.getElementById('chat-active').classList.remove('hidden');
                 document.getElementById('chat-active').classList.add('flex');
                 
-                this.updateChatHeader(user);
+                this.openMobileChat(); this.updateChatHeader(user);
                 
-                // Apply custom wallpaper for this specific conversation
                 const convId = Helpers.getConversationId(AppState.currentUser.uid, user.uid);
                 WallpaperService.apply(convId);
                 
@@ -565,6 +551,14 @@
                 DataService.startConversationListener(db, convId, (data) => {
                     const isRecentlyTyping = data && data.typing && data.typing[user.uid] && (Date.now() - data.typing[user.uid]) < 3000;
                     this.updateChatHeader(user, !!isRecentlyTyping);
+                    
+                    if (data && data.disappearing !== undefined) {
+                        AppState.disappearingTimerMs = data.disappearing;
+                        this.updateDisappearingBanner();
+                    } else {
+                        AppState.disappearingTimerMs = 0;
+                        this.updateDisappearingBanner();
+                    }
                 });
             },
 
@@ -574,20 +568,17 @@
                 const timeStr = msg.timestamp?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) || 'Now';
                 const convId = AppState.selectedUser ? Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid) : null;
                 
-                let displayText = msg.text;
-                let replyContextHtml = '';
+                if (msg.expiresAt) bubble.setAttribute('data-expires-at', msg.expiresAt);
+
+                let displayText = msg.text; let replyContextHtml = '';
                 if(displayText.startsWith('{"_ft":"reply"')) {
                     try {
-                        const parsed = JSON.parse(displayText);
-                        displayText = parsed.text;
-                        replyContextHtml = `
-                            <div class="mb-1.5 px-3 py-1.5 bg-black/20 border-l-2 border-falconix-primary rounded text-xs text-gray-300 opacity-80 truncate max-w-full">
-                                ${this.escapeHTML(parsed.ref.text)}
-                            </div>
-                        `;
+                        const parsed = JSON.parse(displayText); displayText = parsed.text;
+                        replyContextHtml = `<div class="mb-1.5 px-3 py-1.5 bg-black/20 border-l-2 border-falconix-primary rounded text-xs text-gray-300 opacity-80 truncate max-w-full">${this.escapeHTML(parsed.ref.text)}</div>`;
                     } catch(e) {}
                 }
 
+                const timerIcon = msg.expiresAt ? `<svg class="w-3 h-3 text-emerald-400 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>` : '';
                 let receiptHtml = '';
                 if (msg.isSelf) {
                     if (msg.status === 'read') receiptHtml = `<svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7M5 18l4 4 10-10"></path></svg>`;
@@ -602,7 +593,7 @@
                     reactionsHtml = `<div class="absolute -bottom-2 right-2 flex space-x-1 z-10">${badges}</div>`;
                 }
 
-                let contentHtml = `${replyContextHtml}<p class="text-sm leading-relaxed">${this.escapeHTML(displayText)}</p>`;
+                let contentHtml = `${replyContextHtml}<p class="text-sm sm:text-base leading-relaxed">${this.escapeHTML(displayText)}</p>`;
                 
                 if (msg.fileData) {
                     const isAudio = msg.fileData.type === 'audio';
@@ -631,24 +622,25 @@
                 const editedHtml = msg.isEdited ? `<span class="text-[9px] text-gray-500 italic ml-1">(edited)</span>` : '';
 
                 if (msg.isSelf) {
-                    bubble.className = 'flex justify-end animate-slide-up group cursor-context-menu relative mb-2';
+                    bubble.className = 'flex justify-end animate-slide-up group cursor-context-menu relative mb-2 transition-all duration-300';
                     bubble.innerHTML = `
-                        <div class="max-w-[75%] relative">
+                        <div class="max-w-[85%] sm:max-w-[75%] relative">
                             <div class="bg-gradient-to-tr from-falconix-primary to-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 shadow-md shadow-blue-500/10 transition-transform active:scale-[0.98]">
                                 ${contentHtml}
                             </div>
                             ${reactionsHtml}
                             <div class="flex items-center justify-end mt-1 space-x-1 px-1">
                                 <span class="text-[10px] text-gray-500">${timeStr}</span>
+                                ${timerIcon}
                                 ${editedHtml}
                                 ${receiptHtml}
                             </div>
                         </div>
                     `;
                 } else {
-                    bubble.className = 'flex justify-start animate-slide-up group cursor-context-menu relative mb-2';
+                    bubble.className = 'flex justify-start animate-slide-up group cursor-context-menu relative mb-2 transition-all duration-300';
                     bubble.innerHTML = `
-                        <div class="max-w-[75%] flex space-x-2">
+                        <div class="max-w-[85%] sm:max-w-[75%] flex space-x-2">
                             <div class="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 flex items-center justify-center border border-gray-700 text-xs font-bold text-white mt-1 shadow-md overflow-hidden">
                                 ${AppState.selectedUser.photoURL ? `<img src="${AppState.selectedUser.photoURL}" class="w-full h-full object-cover">` : AppState.selectedUser.username.charAt(0).toUpperCase()}
                             </div>
@@ -659,6 +651,7 @@
                                 ${reactionsHtml}
                                 <div class="flex items-center justify-start mt-1 px-1 space-x-1">
                                     <span class="text-[10px] text-gray-500">${timeStr}</span>
+                                    ${timerIcon}
                                     ${editedHtml}
                                 </div>
                             </div>
@@ -673,9 +666,7 @@
 
                 let touchTimer;
                 bubble.addEventListener('touchstart', (e) => {
-                    touchTimer = setTimeout(() => {
-                        this.showContextMenu(e.touches[0].clientX, e.touches[0].clientY, { ...msg, text: displayText }, convId);
-                    }, 500); 
+                    touchTimer = setTimeout(() => { this.showContextMenu(e.touches[0].clientX, e.touches[0].clientY, { ...msg, text: displayText }, convId); }, 500); 
                 });
                 bubble.addEventListener('touchend', () => clearTimeout(touchTimer));
                 bubble.addEventListener('touchmove', () => clearTimeout(touchTimer));
@@ -696,7 +687,6 @@
                             const mediaContainer = bubble.querySelector(`#file-render-${msg.id}`);
                             
                             if (msg.fileData.mimeType.startsWith('image/')) {
-                                // Update to use Lightbox instead of window.open
                                 mediaContainer.innerHTML = `<img src="${url}" class="w-full h-auto object-cover rounded-xl border border-white/10 mt-2 cursor-pointer transition-transform hover:scale-[1.02]" onclick="window.UI.showLightbox('${url}')">`;
                                 mediaContainer.classList.remove('hidden');
                                 list.scrollTop = list.scrollHeight;
@@ -719,9 +709,9 @@
                 const menu = document.getElementById('message-context-menu');
                 this.activeContextMenuParams = { msgId: msg.id, text: msg.text, convId: convId, isSelf: msg.isSelf, timestamp: msg.timestamp };
                 
-                const menuWidth = 200; const menuHeight = 220;
+                const menuWidth = 200; const menuHeight = 260;
                 const posX = x + menuWidth > window.innerWidth ? x - menuWidth : x;
-                const posY = y + menuHeight > window.innerHeight ? y - menuHeight : y;
+                const posY = y + menuHeight > window.innerHeight ? window.innerHeight - menuHeight - 20 : y;
 
                 menu.style.left = `${posX}px`; menu.style.top = `${posY}px`;
                 
@@ -768,49 +758,56 @@
             },
 
             showLightbox(imgUrl) {
-                const lb = document.getElementById('lightbox-modal');
-                const img = document.getElementById('lightbox-img');
-                img.src = imgUrl;
-                lb.classList.remove('hidden');
-                lb.classList.add('flex');
+                const lb = document.getElementById('lightbox-modal'); const img = document.getElementById('lightbox-img');
+                img.src = imgUrl; lb.classList.remove('hidden'); lb.classList.add('flex');
                 setTimeout(() => img.classList.replace('scale-95', 'scale-100'), 10);
             },
 
             hideLightbox() {
-                const lb = document.getElementById('lightbox-modal');
-                const img = document.getElementById('lightbox-img');
+                const lb = document.getElementById('lightbox-modal'); const img = document.getElementById('lightbox-img');
                 img.classList.replace('scale-100', 'scale-95');
-                setTimeout(() => {
-                    lb.classList.add('hidden');
-                    lb.classList.remove('flex');
-                    img.src = '';
-                }, 200);
+                setTimeout(() => { lb.classList.add('hidden'); lb.classList.remove('flex'); img.src = ''; }, 200);
             },
 
             showWallpaperModal() {
                 const modal = document.getElementById('wallpaper-modal');
-                modal.classList.remove('modal-hidden');
-                modal.classList.add('modal-active');
+                modal.classList.remove('modal-hidden'); modal.classList.add('modal-active');
             },
-
             hideWallpaperModal() {
                 const modal = document.getElementById('wallpaper-modal');
-                modal.classList.remove('modal-active');
-                modal.classList.add('modal-hidden');
+                modal.classList.remove('modal-active'); modal.classList.add('modal-hidden');
             },
 
             showSettingsModal() {
-                const modal = document.getElementById('settings-modal');
-                const content = document.getElementById('settings-modal-content');
+                const modal = document.getElementById('settings-modal'); const content = document.getElementById('settings-modal-content');
                 modal.classList.remove('modal-hidden'); modal.classList.add('modal-active');
                 content.classList.remove('modal-content-hidden'); content.classList.add('modal-content-active');
                 document.getElementById('profile-email').textContent = AppState.currentUser.email || AppState.currentUser.phoneNumber || 'Anonymous Agent';
                 document.getElementById('profile-uid').textContent = AppState.currentUser.uid;
             },
-
             hideSettingsModal() {
-                const modal = document.getElementById('settings-modal');
-                const content = document.getElementById('settings-modal-content');
+                const modal = document.getElementById('settings-modal'); const content = document.getElementById('settings-modal-content');
+                content.classList.remove('modal-content-active'); content.classList.add('modal-content-hidden');
+                setTimeout(() => { modal.classList.remove('modal-active'); modal.classList.add('modal-hidden'); }, 200);
+            },
+
+            async showSecurityModal() {
+                if (!AppState.selectedUser || !AppState.localKeys) return;
+                const modal = document.getElementById('security-modal');
+                const content = document.getElementById('security-modal-content');
+                modal.classList.remove('modal-hidden'); modal.classList.add('modal-active');
+                content.classList.remove('modal-content-hidden'); content.classList.add('modal-content-active');
+                
+                // Generate Safety Number
+                document.getElementById('safety-number-display').textContent = "Generating...";
+                const safetyNumber = await Helpers.generateSafetyNumber(AppState.localKeys.publicKeyB64, AppState.selectedUser.publicKey);
+                document.getElementById('safety-number-display').textContent = safetyNumber;
+
+                // Sync Select Dropdown
+                document.getElementById('disappearing-select').value = AppState.disappearingTimerMs.toString();
+            },
+            hideSecurityModal() {
+                const modal = document.getElementById('security-modal'); const content = document.getElementById('security-modal-content');
                 content.classList.remove('modal-content-active'); content.classList.add('modal-content-hidden');
                 setTimeout(() => { modal.classList.remove('modal-active'); modal.classList.add('modal-hidden'); }, 200);
             },
@@ -820,7 +817,7 @@
                 return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
             }
         };
-        window.UI = UI; // Expose globally for inline onclicks
+        window.UI = UI;
 
         const switchView = (viewId) => {
             ['view-login', 'view-signup', 'view-app'].forEach(id => {
@@ -829,8 +826,7 @@
             });
             const target = document.getElementById(viewId);
             if(target) {
-                target.classList.remove('hidden');
-                target.classList.add('animate-slide-up');
+                target.classList.remove('hidden'); target.classList.add('animate-slide-up');
             }
         };
 
@@ -873,9 +869,8 @@
             document.getElementById('form-login')?.addEventListener('submit', async (e) => {
                 e.preventDefault(); const btn = document.getElementById('btn-login');
                 btn.disabled = true; btn.textContent = 'Authenticating...';
-                try {
-                    await signInWithEmailAndPassword(auth, document.getElementById('login-email').value, document.getElementById('login-password').value);
-                } catch (err) { ToastManager.show(err.message.replace('Firebase: ', ''), 'error'); } 
+                try { await signInWithEmailAndPassword(auth, document.getElementById('login-email').value, document.getElementById('login-password').value); } 
+                catch (err) { ToastManager.show(err.message.replace('Firebase: ', ''), 'error'); } 
                 finally { btn.disabled = false; btn.textContent = 'Sign In'; }
             });
 
@@ -890,10 +885,8 @@
             });
 
             document.getElementById('btn-google-login')?.addEventListener('click', async () => {
-                try {
-                    const result = await signInWithPopup(auth, googleProvider);
-                    await checkAndInitializeKeys(result.user, result.user.displayName || "Google User", result.user.photoURL);
-                } catch (err) { ToastManager.show(err.message.replace('Firebase: ', ''), 'error'); }
+                try { const result = await signInWithPopup(auth, googleProvider); await checkAndInitializeKeys(result.user, result.user.displayName || "Google User", result.user.photoURL); } 
+                catch (err) { ToastManager.show(err.message.replace('Firebase: ', ''), 'error'); }
             });
 
             const phoneSection = document.getElementById('phone-login-section');
@@ -909,8 +902,7 @@
                 const btn = document.getElementById('btn-send-sms'); btn.disabled = true; btn.textContent = "Sending...";
                 try {
                     confirmationResult = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
-                    document.getElementById('otp-section').classList.remove('hidden');
-                    ToastManager.show("SMS Code Sent!");
+                    document.getElementById('otp-section').classList.remove('hidden'); ToastManager.show("SMS Code Sent!");
                 } catch (err) {
                     ToastManager.show(err.message.replace('Firebase: ', ''), 'error');
                     if(window.recaptchaVerifier) window.recaptchaVerifier.render().then(wId => grecaptcha.reset(wId));
@@ -921,10 +913,8 @@
                 const code = document.getElementById('login-otp').value;
                 if (!code) return;
                 const btn = document.getElementById('btn-verify-sms'); btn.disabled = true; btn.textContent = "Verifying...";
-                try {
-                    const result = await confirmationResult.confirm(code);
-                    await checkAndInitializeKeys(result.user, result.user.phoneNumber);
-                } catch (err) { ToastManager.show("Invalid code.", 'error'); } 
+                try { const result = await confirmationResult.confirm(code); await checkAndInitializeKeys(result.user, result.user.phoneNumber); } 
+                catch (err) { ToastManager.show("Invalid code.", 'error'); } 
                 finally { btn.disabled = false; btn.textContent = "Verify & Authenticate"; }
             });
 
@@ -945,7 +935,6 @@
 
             btnSend?.addEventListener('click', handleSend);
             
-            // Audio Recording Logic
             const btnMic = document.getElementById('btn-record-audio');
             let mediaRecorder; let audioChunks = []; let isRecording = false;
 
@@ -959,7 +948,7 @@
                         mediaRecorder.onstop = async () => {
                             const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                             audioChunks = []; stream.getTracks().forEach(t => t.stop());
-                            if (audioBlob.size > 500 * 1024) return ToastManager.show("Voice note too long. Limit is ~30 seconds.", "error");
+                            if (audioBlob.size > 500 * 1024) return ToastManager.show("Voice note too long.", "error");
                             await ChatService.sendFile(audioBlob, AppState.selectedUser, 'audio');
                         };
                         mediaRecorder.start(); isRecording = true;
@@ -969,53 +958,52 @@
                 } else {
                     mediaRecorder.stop(); isRecording = false;
                     btnMic.classList.remove('text-red-400', 'bg-red-500/20', 'animate-pulse');
-                    chatInput.placeholder = "Type an encrypted message..."; chatInput.disabled = false;
+                    chatInput.placeholder = "Type a message..."; chatInput.disabled = false;
                 }
             });
 
-            // File Uploads
             const fileInput = document.getElementById('chat-file-input');
             document.getElementById('btn-attach-file')?.addEventListener('click', () => fileInput.click());
             fileInput?.addEventListener('change', async (e) => {
                 const file = e.target.files[0];
                 if (!file || !AppState.selectedUser) return;
-                if (file.size > 500 * 1024) return ToastManager.show("File too large for Base64 storage. Max 500KB.", "error");
-                await ChatService.sendFile(file, AppState.selectedUser);
-                fileInput.value = ''; 
+                if (file.size > 500 * 1024) return ToastManager.show("File too large. Max 500KB.", "error");
+                await ChatService.sendFile(file, AppState.selectedUser); fileInput.value = ''; 
             });
 
-            // Wallpaper Logic
             document.getElementById('btn-chat-wallpaper')?.addEventListener('click', () => UI.showWallpaperModal());
             document.getElementById('btn-close-wallpaper')?.addEventListener('click', () => UI.hideWallpaperModal());
-            
             document.querySelectorAll('.wallpaper-preset').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     if (!AppState.selectedUser) return;
-                    const convId = Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid);
-                    WallpaperService.save(convId, e.target.dataset.bg);
+                    WallpaperService.save(Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid), e.target.dataset.bg);
                     UI.hideWallpaperModal();
                 });
             });
-
             document.getElementById('btn-wallpaper-clear')?.addEventListener('click', () => {
                 if (!AppState.selectedUser) return;
-                const convId = Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid);
-                WallpaperService.clear(convId);
+                WallpaperService.clear(Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid));
                 UI.hideWallpaperModal();
             });
-
             document.getElementById('wallpaper-upload')?.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (!file || !AppState.selectedUser) return;
+                const file = e.target.files[0]; if (!file || !AppState.selectedUser) return;
                 if (file.size > 1.5 * 1024 * 1024) { ToastManager.show("Wallpaper must be under 1.5MB", "error"); return; }
-                
                 const reader = new FileReader();
                 reader.onload = (ev) => {
-                    const convId = Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid);
-                    WallpaperService.save(convId, ev.target.result);
+                    WallpaperService.save(Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid), ev.target.result);
                     UI.hideWallpaperModal();
                 };
                 reader.readAsDataURL(file);
+            });
+
+            // Security Modal
+            document.getElementById('btn-security-settings')?.addEventListener('click', () => UI.showSecurityModal());
+            document.getElementById('btn-close-security')?.addEventListener('click', () => UI.hideSecurityModal());
+            document.getElementById('disappearing-select')?.addEventListener('change', async (e) => {
+                if (!AppState.selectedUser) return;
+                const val = parseInt(e.target.value);
+                const convId = Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid);
+                await DataService.setDisappearingTimer(db, convId, val);
             });
 
             // Settings Modal
@@ -1051,8 +1039,7 @@
 
             document.getElementById('ctx-btn-edit')?.addEventListener('click', () => {
                 if (UI.activeContextMenuParams) {
-                    AppState.editingMsgId = UI.activeContextMenuParams.msgId;
-                    chatInput.value = UI.activeContextMenuParams.text;
+                    AppState.editingMsgId = UI.activeContextMenuParams.msgId; chatInput.value = UI.activeContextMenuParams.text;
                     UI.showInputBanner('Editing Message', 'Changes will be re-encrypted.', 'border-emerald-500');
                 }
                 UI.hideContextMenu();
@@ -1073,10 +1060,25 @@
                 UI.hideContextMenu();
             });
 
-            onAuthStateChanged(auth, (user) => {
+            // Disappearing Messages Client-Side Sweeper
+            setInterval(() => {
+                const now = Date.now();
+                document.querySelectorAll('[data-expires-at]').forEach(el => {
+                    const exp = parseInt(el.getAttribute('data-expires-at'));
+                    if (exp && exp < now) {
+                        el.style.opacity = '0'; el.style.transform = 'scale(0.9)';
+                        setTimeout(() => el.remove(), 300);
+                    }
+                });
+            }, 5000);
+
+            onAuthStateChanged(auth, async (user) => {
                 if (user && !user.isAnonymous) {
                     AppState.currentUser = user; switchView('view-app');
                     document.getElementById('current-user-display').textContent = user.email || user.phoneNumber || 'Verified Agent';
+                    
+                    AppState.localKeys = await KeyManager.getKeysLocally(user.uid);
+                    
                     DataService.updatePresence(db, user.uid, true);
                     DataService.startUsersListener(db, user.uid, (users) => {
                         AppState.users = users; UI.renderUserList(users);
@@ -1087,7 +1089,7 @@
                     });
                 } else {
                     if (AppState.currentUser) DataService.updatePresence(db, AppState.currentUser.uid, false);
-                    AppState.currentUser = null; UI.clearInputBanners();
+                    AppState.currentUser = null; AppState.localKeys = null; UI.clearInputBanners();
                     if (AppState.unsubscribeUsers) AppState.unsubscribeUsers();
                     if (AppState.unsubscribeMessages) AppState.unsubscribeMessages();
                     if (AppState.unsubscribeConv) AppState.unsubscribeConv();
@@ -1100,14 +1102,14 @@
         });
     </script>
 </head>
-<body class="h-screen w-screen flex items-center justify-center relative">
+<body class="h-screen w-screen flex items-center justify-center relative bg-falconix-dark">
     
-    <div id="toast-container" class="fixed top-6 right-6 z-50 flex flex-col items-end pointer-events-none"></div>
+    <div id="toast-container" class="fixed top-4 left-4 right-4 sm:left-auto sm:top-6 sm:right-6 z-50 flex flex-col items-center sm:items-end pointer-events-none"></div>
 
     <div class="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-falconix-primary rounded-full mix-blend-screen filter blur-[120px] opacity-20 pointer-events-none"></div>
     <div class="fixed bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-falconix-secondary rounded-full mix-blend-screen filter blur-[120px] opacity-20 pointer-events-none"></div>
 
-    <main id="view-login" class="w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar p-10 rounded-3xl glass-panel relative z-10 mx-4">
+    <main id="view-login" class="w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar p-6 sm:p-10 rounded-2xl sm:rounded-3xl glass-panel relative z-10 mx-4">
         <div class="text-center mb-8">
             <div class="inline-flex items-center justify-center w-28 h-28 rounded-full mb-5 shadow-[0_0_40px_rgba(157,78,221,0.3)] overflow-hidden border border-white/10 ring-4 ring-falconix-primary/20">
                 <img src="https://i.ibb.co/7Nz80xdL/Falconix-Digital-Logo.png" alt="Falconix Digital Logo" class="w-full h-full object-cover">
@@ -1167,7 +1169,7 @@
         <p class="text-center text-sm text-gray-400 mt-8">New operative? <a href="#" id="nav-to-signup" class="text-falconix-primary hover:text-blue-300 font-semibold transition-colors">Establish Node</a></p>
     </main>
 
-    <main id="view-signup" class="hidden w-full max-w-md p-10 rounded-3xl glass-panel relative z-10 mx-4">
+    <main id="view-signup" class="hidden w-full max-w-md p-6 sm:p-10 rounded-2xl sm:rounded-3xl glass-panel relative z-10 mx-4">
         <div class="text-center mb-8"><h1 class="text-2xl font-bold text-white tracking-tight">Establish Node</h1></div>
         <form id="form-signup" class="space-y-5">
             <div>
@@ -1181,15 +1183,17 @@
             <div>
                 <label class="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Master Password</label>
                 <input type="password" id="signup-password" required minlength="8" placeholder="••••••••" class="w-full px-4 py-3.5 rounded-xl bg-gray-900/60 border border-gray-700 text-white focus:outline-none focus:border-falconix-secondary">
+                <p class="text-[10px] text-gray-500 mt-2">Required for key generation. Do not lose this.</p>
             </div>
             <button type="submit" id="btn-signup" class="w-full py-3.5 px-4 bg-gradient-to-r from-falconix-secondary to-purple-600 hover:from-purple-500 text-white font-semibold rounded-xl shadow-lg transition-all">Initialize Keys & Sign Up</button>
         </form>
         <p class="text-center text-sm text-gray-400 mt-8">Already registered? <a href="#" id="nav-to-login" class="text-falconix-secondary hover:text-purple-300 font-semibold transition-colors">Access Terminal</a></p>
     </main>
 
-    <main id="view-app" class="hidden w-full h-full absolute inset-0 flex flex-col relative z-10">
+    <main id="view-app" class="hidden w-full h-full absolute inset-0 flex flex-col relative z-10 bg-falconix-dark">
         <div class="glass-panel w-full h-full flex overflow-hidden border-0 rounded-none shadow-none">
-            <aside class="w-full sm:w-80 md:w-96 bg-gray-900/40 border-r border-white/5 flex flex-col">
+            
+            <aside id="app-sidebar" class="flex w-full sm:w-80 md:w-96 bg-gray-900/40 sm:border-r border-white/5 flex-col transition-all duration-300 z-20">
                 <header class="p-4 border-b border-white/5 flex justify-between items-center bg-black/20">
                     <div class="flex items-center space-x-3">
                         <div class="w-10 h-10 rounded-full flex items-center justify-center border border-white/10 overflow-hidden shadow-lg shadow-purple-500/20">
@@ -1206,7 +1210,7 @@
                 <div id="sidebar-user-list" class="flex-1 overflow-y-auto custom-scrollbar"></div>
             </aside>
 
-            <section class="hidden sm:flex flex-1 flex-col bg-black/10 relative">
+            <section id="app-chat-area" class="hidden sm:flex flex-1 flex-col bg-black/10 relative z-10 w-full transition-all duration-300">
                 <div id="chat-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-center p-8 z-10">
                     <div class="w-24 h-24 mb-6 rounded-3xl bg-gradient-to-tr from-falconix-primary/20 to-falconix-secondary/20 flex items-center justify-center border border-white/5 shadow-xl"><svg class="w-12 h-12 text-blue-400/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg></div>
                     <h2 class="text-xl font-bold text-white mb-2 tracking-tight">Network Idle</h2>
@@ -1214,41 +1218,84 @@
                 </div>
 
                 <div id="chat-active" class="hidden flex-col h-full w-full relative z-20 bg-gray-900/20 backdrop-blur-sm transition-all duration-300">
-                    <header class="h-16 px-6 border-b border-white/5 bg-black/50 backdrop-blur-md flex items-center justify-between z-30">
-                        <div class="flex items-center space-x-4">
-                            <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-gray-700 to-gray-800 flex items-center justify-center shadow-lg"><svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>
-                            <div>
-                                <h3 id="chat-header-name" class="font-semibold text-white tracking-wide">Operative</h3>
-                                <div id="chat-header-status" class="flex items-center space-x-1.5 mt-0.5"></div>
+                    <header class="h-14 sm:h-16 px-4 sm:px-6 border-b border-white/5 bg-black/50 backdrop-blur-md flex items-center justify-between z-30">
+                        <div class="flex items-center space-x-3 sm:space-x-4">
+                            <button onclick="window.UI.closeMobileChat()" class="sm:hidden p-1.5 -ml-1.5 text-gray-400 hover:text-white rounded-lg transition-colors">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
+                            </button>
+                            <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-gray-700 to-gray-800 flex items-center justify-center shadow-lg"><svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>
+                            <div class="overflow-hidden">
+                                <h3 id="chat-header-name" class="font-semibold text-white tracking-wide text-sm sm:text-base truncate">Operative</h3>
+                                <div class="flex items-center">
+                                    <div id="chat-header-status" class="flex items-center space-x-1.5 mt-0.5"></div>
+                                    <div id="disappearing-banner" class="hidden ml-3 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center"></div>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="flex items-center space-x-2 text-gray-400">
-                            <!-- Wallpaper Button -->
+                        <div class="flex items-center space-x-1 sm:space-x-2 text-gray-400">
+                            <button id="btn-security-settings" class="p-2 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors" title="End-to-End Security">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                            </button>
                             <button id="btn-chat-wallpaper" class="p-2 hover:text-falconix-primary hover:bg-blue-500/10 rounded-lg transition-colors" title="Custom Chat Wallpaper">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
                             </button>
                         </div>
                     </header>
 
-                    <div id="chat-message-list" class="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col space-y-4 z-20"></div>
+                    <div id="chat-message-list" class="flex-1 p-4 sm:p-6 overflow-y-auto custom-scrollbar flex flex-col space-y-4 z-20"></div>
 
-                    <footer class="p-4 bg-black/50 backdrop-blur-md border-t border-white/5 relative z-30">
+                    <footer class="p-2 sm:p-4 bg-black/50 backdrop-blur-md border-t border-white/5 relative z-30">
                         <div id="input-action-banner" class="absolute bottom-[100%] left-0 w-full px-4 hidden z-10"></div>
-                        <div class="flex items-end space-x-2">
+                        <div class="flex items-end space-x-1.5 sm:space-x-2">
                             <input type="file" id="chat-file-input" class="hidden" accept="image/*, application/pdf, text/plain">
-                            <button id="btn-attach-file" class="p-3 text-gray-400 hover:text-falconix-primary hover:bg-blue-500/10 rounded-xl transition-colors"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg></button>
+                            <button id="btn-attach-file" class="p-2.5 sm:p-3 text-gray-400 hover:text-falconix-primary hover:bg-blue-500/10 rounded-xl transition-colors"><svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg></button>
                             <div class="flex-1 bg-gray-900/80 border border-white/10 rounded-2xl overflow-hidden focus-within:border-falconix-primary/50 transition-all flex">
-                                <textarea id="chat-input" rows="1" placeholder="Type an encrypted message..." class="w-full max-h-32 bg-transparent text-white px-4 py-3.5 focus:outline-none resize-none custom-scrollbar text-sm"></textarea>
+                                <textarea id="chat-input" rows="1" placeholder="Type a message..." class="w-full max-h-32 bg-transparent text-white px-3 py-2.5 sm:px-4 sm:py-3.5 focus:outline-none resize-none custom-scrollbar text-sm sm:text-base"></textarea>
                             </div>
-                            <button id="btn-record-audio" class="p-3.5 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 rounded-2xl transition-all"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg></button>
-                            <button id="btn-send-message" class="p-3.5 bg-gradient-to-r from-falconix-primary to-blue-600 text-white rounded-2xl shadow-lg hover:shadow-blue-500/25 transition-all"><svg class="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg></button>
+                            <button id="btn-record-audio" class="p-2.5 sm:p-3.5 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 rounded-2xl transition-all"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg></button>
+                            <button id="btn-send-message" class="p-2.5 sm:p-3.5 bg-gradient-to-r from-falconix-primary to-blue-600 text-white rounded-2xl shadow-lg hover:shadow-blue-500/25 transition-all"><svg class="w-5 h-5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg></button>
                         </div>
                     </footer>
                 </div>
             </section>
         </div>
     </main>
+
+    <!-- SECURITY MODAL -->
+    <div id="security-modal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm modal-hidden transition-opacity duration-200">
+        <div id="security-modal-content" class="w-full max-w-md bg-gray-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden modal-content-hidden transition-transform duration-300 mx-4">
+            <header class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-black/20">
+                <h3 class="text-md font-bold text-white flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    End-to-End Security
+                </h3>
+                <button id="btn-close-security" class="text-gray-400 hover:text-white"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+            </header>
+            <div class="p-6 space-y-6">
+                <!-- Safety Number -->
+                <div>
+                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Verify Safety Number</h4>
+                    <p class="text-[11px] text-gray-500 mb-3 leading-relaxed">To verify that messages and calls with this operative are end-to-end encrypted, compare this number with them.</p>
+                    <div class="bg-black/30 border border-white/5 rounded-xl p-4 text-center">
+                        <p id="safety-number-display" class="text-lg font-mono text-emerald-400 tracking-[0.2em] break-words"></p>
+                    </div>
+                </div>
+
+                <!-- Disappearing Messages -->
+                <div>
+                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Disappearing Messages</h4>
+                    <p class="text-[11px] text-gray-500 mb-3 leading-relaxed">For more privacy, new messages will securely self-destruct from all devices and servers after the selected time.</p>
+                    <select id="disappearing-select" class="w-full bg-gray-800 border border-white/10 text-white text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-falconix-primary appearance-none custom-scrollbar">
+                        <option value="0">Off</option>
+                        <option value="60000">1 Minute (Testing)</option>
+                        <option value="3600000">1 Hour</option>
+                        <option value="86400000">24 Hours</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- LIGHTBOX OVERLAY -->
     <div id="lightbox-modal" class="fixed inset-0 z-[100] bg-black/95 hidden items-center justify-center backdrop-blur-xl transition-opacity">
@@ -1287,7 +1334,7 @@
     </div>
 
     <!-- SETTINGS MODAL -->
-    <div id="settings-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm modal-hidden transition-opacity duration-200">
+    <div id="settings-modal" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm modal-hidden transition-opacity duration-200">
         <div id="settings-modal-content" class="w-full max-w-md bg-gray-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden modal-content-hidden transition-transform duration-300 mx-4">
             <header class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-black/20">
                 <h3 class="text-lg font-bold text-white tracking-tight flex items-center">Node Settings</h3>
@@ -1318,18 +1365,19 @@
         </div>
     </div>
 
-    <div id="message-context-menu" class="fixed z-50 w-48 bg-gray-800/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl py-1 context-menu-hidden transition-all duration-150 origin-top-left flex flex-col">
+    <!-- CONTEXT MENU -->
+    <div id="message-context-menu" class="fixed z-[80] w-48 bg-gray-800/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl py-2 context-menu-hidden transition-all duration-150 origin-top-left flex flex-col">
         <div class="flex justify-around p-2 border-b border-white/5 bg-black/20">
-            <button class="emoji-react-btn text-lg hover:scale-125 transition-transform">👍</button>
-            <button class="emoji-react-btn text-lg hover:scale-125 transition-transform">❤️</button>
-            <button class="emoji-react-btn text-lg hover:scale-125 transition-transform">😂</button>
-            <button class="emoji-react-btn text-lg hover:scale-125 transition-transform">😮</button>
+            <button class="emoji-react-btn text-xl sm:text-lg hover:scale-125 transition-transform p-1">👍</button>
+            <button class="emoji-react-btn text-xl sm:text-lg hover:scale-125 transition-transform p-1">❤️</button>
+            <button class="emoji-react-btn text-xl sm:text-lg hover:scale-125 transition-transform p-1">😂</button>
+            <button class="emoji-react-btn text-xl sm:text-lg hover:scale-125 transition-transform p-1">😮</button>
         </div>
-        <button id="ctx-btn-reply" class="w-full px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-falconix-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg><span>Reply Securely</span></button>
-        <button id="ctx-btn-edit" class="w-full px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg><span>Edit Message</span></button>
-        <button id="ctx-btn-copy" class="w-full px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg><span>Copy Text</span></button>
+        <button id="ctx-btn-reply" class="w-full px-4 py-3 sm:py-2.5 text-left text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-falconix-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg><span>Reply Securely</span></button>
+        <button id="ctx-btn-edit" class="w-full px-4 py-3 sm:py-2.5 text-left text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg><span>Edit Message</span></button>
+        <button id="ctx-btn-copy" class="w-full px-4 py-3 sm:py-2.5 text-left text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg><span>Copy Text</span></button>
         <div class="h-px bg-white/5 my-1"></div>
-        <button id="ctx-btn-delete" class="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center space-x-3 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span>Delete for Everyone</span></button>
+        <button id="ctx-btn-delete" class="w-full px-4 py-3 sm:py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center space-x-3 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span>Delete for Everyone</span></button>
     </div>
 
 </body>
