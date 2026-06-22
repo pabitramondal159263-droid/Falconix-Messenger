@@ -1143,11 +1143,37 @@
                     const privateKeyB64 = await RSA.exportPrivateKey(keyPair.privateKey);
                     
                     await KeyManager.saveKeysLocally(user.uid, privateKeyB64, publicKeyB64);
-            document.getElementById('btn-verify-sms')?.addEventListener('click', async () => {
-                const code = document.getElementById('login-otp').value; if (!code) return;
-                const btn = document.getElementById('btn-verify-sms'); btn.disabled = true; btn.textContent = "Verifying...";
-                try { const result = await confirmationResult.confirm(code); await checkAndInitializeKeys(result.user, result.user.phoneNumber); } 
-                catch (err) { ToastManager.show("Invalid code.", 'error'); } finally { btn.disabled = false; btn.textContent = "Verify & Authenticate"; }
+                    
+                    await setDoc(userRef, {
+                        uid: user.uid, username: defaultUsername || user.email || 'Ghost', bio: 'Available', email: user.email || '', 
+                        photoURL: photoURL || user.photoURL || null, createdAt: new Date().toISOString(), isOnline: true, publicKey: publicKeyB64 
+                    }, { merge: true });
+                    ToastManager.show("Account & Keys securely created!");
+                    if(forceNew) setTimeout(() => location.reload(), 1000);
+                } else { 
+                    ToastManager.show("Authentication successful!"); 
+                    if(photoURL || user.photoURL) await updateDoc(userRef, { photoURL: photoURL || user.photoURL }); 
+                }
+            };
+
+            document.getElementById('nav-to-signup')?.addEventListener('click', (e) => { e.preventDefault(); switchView('view-signup'); });
+            document.getElementById('nav-to-login')?.addEventListener('click', (e) => { e.preventDefault(); switchView('view-login'); });
+
+            document.getElementById('form-login')?.addEventListener('submit', async (e) => {
+                e.preventDefault(); const btn = document.getElementById('btn-login'); btn.disabled = true; btn.textContent = 'Authenticating...';
+                try { await signInWithEmailAndPassword(auth, document.getElementById('login-email').value, document.getElementById('login-password').value); } 
+                catch (err) { ToastManager.show(err.message.replace('Firebase: ', ''), 'error'); } finally { btn.disabled = false; btn.textContent = 'Sign In'; }
+            });
+
+            document.getElementById('form-signup')?.addEventListener('submit', async (e) => {
+                e.preventDefault(); const btn = document.getElementById('btn-signup'); btn.disabled = true; btn.textContent = 'Authenticating...';
+                try { const cred = await createUserWithEmailAndPassword(auth, document.getElementById('signup-email').value, document.getElementById('signup-password').value); await checkAndInitializeKeys(cred.user, document.getElementById('signup-username').value); } 
+                catch (err) { ToastManager.show(err.message.replace('Firebase: ', ''), 'error'); } finally { btn.disabled = false; btn.textContent = 'Initialize Keys & Sign Up'; }
+            });
+
+            document.getElementById('btn-google-login')?.addEventListener('click', async () => {
+                try { const result = await signInWithPopup(auth, googleProvider); await checkAndInitializeKeys(result.user, result.user.displayName || "Google User", result.user.photoURL); } 
+                catch (err) { ToastManager.show(err.message.replace('Firebase: ', ''), 'error'); }
             });
 
             const chatInput = document.getElementById('chat-input');
