@@ -126,7 +126,7 @@
             GoogleAuthProvider, signInWithPopup, sendEmailVerification, updateProfile
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
-            getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, arrayUnion
+            getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, arrayUnion, increment
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'falconix-messenger-v1';
@@ -145,6 +145,26 @@
                 const k = 1024; const dm = decimals < 0 ? 0 : decimals; const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
                 const i = Math.floor(Math.log(bytes) / Math.log(k));
                 return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+            },
+            formatLastSeen(timestamp) {
+                if (!timestamp) return 'Offline';
+                const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                
+                if (diffMins < 1) return 'Online'; 
+                
+                const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+                
+                const yesterday = new Date(now);
+                yesterday.setDate(now.getDate() - 1);
+                const isYesterday = date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear();
+
+                if (isToday) return `last seen today at ${timeString}`;
+                if (isYesterday) return `last seen yesterday at ${timeString}`;
+                return `last seen ${date.toLocaleDateString()} at ${timeString}`;
             },
             async generateSafetyNumber(pubKey1, pubKey2) {
                 const sortedKeys = [pubKey1, pubKey2].sort().join('');
@@ -491,6 +511,12 @@
                         document.getElementById('settings-input-username').value = AppState.currentUserData.username || '';
                         document.getElementById('settings-input-bio').value = AppState.currentUserData.bio || '';
                         
+                        const viewsCount = document.getElementById('profile-views-count');
+                        if (viewsCount) viewsCount.textContent = AppState.currentUserData.profileViews || 0;
+
+                        const toggleLastSeen = document.getElementById('toggle-last-seen');
+                        if (toggleLastSeen) toggleLastSeen.checked = AppState.currentUserData.showLastSeen !== false;
+
                         const settingsAvatarPreview = document.getElementById('settings-avatar-preview');
                         const btnRemoveAvatar = document.getElementById('btn-remove-avatar');
                         if (AppState.currentUserData.photoURL) { 
@@ -961,31 +987,42 @@
                     const iBlockedThem = AppState.currentUserData?.blocked?.includes(user.uid);
                     const isOnline = iAmBlocked || iBlockedThem ? false : user.isOnline;
                     const grayClass = iAmBlocked ? 'grayscale opacity-50' : '';
+                    
+                    const statusText = isOnline ? 'Online' : (user.lastSeen && user.showLastSeen !== false ? Helpers.formatLastSeen(user.lastSeen) : 'Offline');
 
                     const el = document.createElement('div');
                     el.className = `p-4 border-b border-white/5 hover:bg-gray-800 cursor-pointer transition-colors flex items-center space-x-3 group ${user.isVault ? 'bg-falconix-primary/10' : ''}`;
                     el.innerHTML = `
-                        <div class="relative shrink-0">
+                        <div class="relative shrink-0 avatar-click-target z-10" title="View Profile">
                             <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-falconix-primary to-falconix-secondary flex items-center justify-center text-white font-bold shadow-lg overflow-hidden ${grayClass}">
                                 ${user.isVault ? '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>' : (user.photoURL ? `<img src="${user.photoURL}" alt="${user.username}" class="w-full h-full object-cover">` : user.username.charAt(0).toUpperCase())}
                             </div>
                             ${isOnline ? '<div class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-falconix-dark rounded-full"></div>' : ''}
                         </div>
-                        <div class="flex-1 min-w-0 flex flex-col justify-center">
+                        <div class="flex-1 min-w-0 flex flex-col justify-center select-user-target">
                             <div class="flex justify-between items-center">
                                 <h4 class="text-white text-sm font-semibold truncate group-hover:text-falconix-primary transition-colors pr-2 ${grayClass}">${this.escapeHTML(user.username)}</h4>
-                                <div class="flex items-center shrink-0">
-                                    <span class="text-[10px] ${isOnline ? 'text-emerald-400' : 'text-gray-500'} font-mono">${isOnline ? 'Online' : 'Offline'}</span>
+                                <div class="flex items-center shrink-0 ml-2 overflow-hidden">
+                                    <span class="text-[10px] ${isOnline ? 'text-emerald-400' : 'text-gray-500'} font-medium truncate max-w-[110px] sm:max-w-[130px] text-right" title="${statusText}">${statusText}</span>
                                     ${unreadBadgeHtml}
                                 </div>
                             </div>
                             <p class="text-gray-400 text-[11px] truncate mt-0.5">${(iAmBlocked || iBlockedThem) ? '' : (user.bio ? this.escapeHTML(user.bio) : 'Available')}</p>
                         </div>
                     `;
-                    el.addEventListener('click', async () => {
+                    
+                    const avatarDiv = el.querySelector('.avatar-click-target');
+                    avatarDiv.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if(!user.isVault) UI.showDpQuickModal(user);
+                    });
+
+                    const selectDiv = el.querySelector('.select-user-target');
+                    selectDiv.addEventListener('click', async () => {
                         Router.navigate(`app/chat/${user.uid}`);
                         if (unreadCount > 0) { try { await updateDoc(doc(db, FIREBASE_PATHS.CONVERSATIONS, convId), { [`unread_${AppState.currentUser.uid}`]: 0 }); } catch(e){} }
                     });
+                    
                     listContainer.appendChild(el);
                 });
             },
@@ -1010,7 +1047,8 @@
                     statusContainer.innerHTML = `<span class="flex items-center space-x-1"><span class="w-1.5 h-1.5 bg-falconix-primary rounded-full animate-bounce"></span><span class="w-1.5 h-1.5 bg-falconix-primary rounded-full animate-bounce" style="animation-delay: 0.1s"></span><span class="w-1.5 h-1.5 bg-falconix-primary rounded-full animate-bounce" style="animation-delay: 0.2s"></span></span><span class="text-[11px] text-falconix-primary font-medium uppercase tracking-wider ml-2">Typing...</span>`;
                 } else {
                     const bioStr = (iAmBlocked || iBlockedThem) ? '' : (user.bio ? `<span class="mx-1.5 text-gray-600">•</span><span class="text-[11px] text-gray-400 truncate max-w-[100px] sm:max-w-[200px]">${this.escapeHTML(user.bio)}</span>` : '');
-                    statusContainer.innerHTML = `<span class="w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-gray-500'}"></span><span class="text-[11px] ${isOnline ? 'text-emerald-400' : 'text-gray-400'} font-medium uppercase tracking-wider">${isOnline ? 'Online' : 'Offline'}</span>${bioStr}`;
+                    const statusText = isOnline ? 'Online' : (user.lastSeen && user.showLastSeen !== false ? Helpers.formatLastSeen(user.lastSeen) : 'Offline');
+                    statusContainer.innerHTML = `<span class="w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-gray-500'} shrink-0"></span><span class="text-[11px] ${isOnline ? 'text-emerald-400' : 'text-gray-400'} font-medium tracking-wide truncate max-w-[160px] sm:max-w-[280px]">${statusText}</span>${bioStr}`;
                 }
 
                 const callBtns = document.getElementById('chat-header-calls');
@@ -1041,6 +1079,10 @@
                 document.getElementById('chat-active').classList.add('flex');
                 
                 this.openMobileChat(); this.updateChatHeader(user); this.updateInputState(user);
+                
+                if (user.uid !== AppState.currentUser.uid && !user.isVault) {
+                    try { updateDoc(doc(db, FIREBASE_PATHS.USERS, user.uid), { profileViews: increment(1) }); } catch(e) {}
+                }
                 
                 const convId = Helpers.getConversationId(AppState.currentUser.uid, user.uid);
                 WallpaperService.apply(convId);
@@ -1153,7 +1195,21 @@
 
                 const urlRegex = /(https?:\/\/[^\s]+)/g; const hasLink = urlRegex.test(displayText);
                 let textFormatted = this.escapeHTML(displayText);
-                if(hasLink) textFormatted = textFormatted.replace(urlRegex, (url) => `<a href="${url}" target="_blank" class="text-blue-300 underline underline-offset-2 hover:text-blue-200 transition-colors">${url}</a>`);
+                
+                const extractedUrls = [];
+                textFormatted = textFormatted.replace(urlRegex, (url) => {
+                    extractedUrls.push(url);
+                    return `__URL_PLACEHOLDER_${extractedUrls.length - 1}__`;
+                });
+
+                textFormatted = textFormatted.replace(/\*\*([^\*]+)\*\*/g, '<strong class="font-bold">$1</strong>');
+                textFormatted = textFormatted.replace(/\*([^\*]+)\*/g, '<em class="italic">$1</em>');
+                textFormatted = textFormatted.replace(/_([^_]+)_/g, '<em class="italic">$1</em>');
+
+                extractedUrls.forEach((url, index) => {
+                    const linkHtml = `<a href="${url}" target="_blank" class="text-blue-300 underline underline-offset-2 hover:text-blue-200 transition-colors">${url}</a>`;
+                    textFormatted = textFormatted.replace(`__URL_PLACEHOLDER_${index}__`, linkHtml);
+                });
 
                 const timerIcon = msg.expiresAt ? `<svg class="w-3 h-3 text-emerald-400 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>` : '';
                 let receiptHtml = '';
@@ -1161,7 +1217,7 @@
                     receiptHtml = `<span class="receipt-container">${msg.status === 'read' ? '<svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7M5 18l4 4 10-10"></path></svg>' : '<svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'}</span>`;
                 }
 
-                let contentHtml = `${replyContextHtml}<p class="text-sm sm:text-base leading-relaxed break-words">${textFormatted}</p>`;
+                let contentHtml = `${replyContextHtml}<p class="text-sm sm:text-base leading-relaxed break-words whitespace-pre-wrap">${textFormatted}</p>`;
                 if(hasLink) {
                     const previewId = `link-preview-${msg.id}`; contentHtml += `<div id="${previewId}" class="hidden"></div>`;
                     const urls = displayText.match(urlRegex); if(urls && urls.length > 0) this.fetchLinkPreview(urls[0], previewId);
@@ -1395,6 +1451,78 @@
             },
             hideIncomingCallModal() { document.getElementById('incoming-call-modal').classList.add('hidden'); document.getElementById('incoming-call-modal').classList.remove('flex'); },
 
+            showDpQuickModal(user) {
+                window.activeDpUser = user;
+                const modal = document.getElementById('dp-quick-modal');
+                document.getElementById('dp-quick-name').textContent = user.username;
+                const img = document.getElementById('dp-quick-img');
+                const fallback = document.getElementById('dp-quick-fallback');
+                
+                if (user.photoURL) {
+                    img.src = user.photoURL;
+                    img.classList.remove('hidden');
+                    fallback.classList.add('hidden');
+                } else {
+                    img.classList.add('hidden');
+                    fallback.classList.remove('hidden');
+                    document.getElementById('dp-quick-fallback-text').textContent = user.username.charAt(0).toUpperCase();
+                }
+                
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            },
+
+            hideDpQuickModal() {
+                document.getElementById('dp-quick-modal').classList.add('hidden');
+                document.getElementById('dp-quick-modal').classList.remove('flex');
+                window.activeDpUser = null;
+            },
+
+            showContactProfile(user) {
+                if (!user) return;
+                window.activeProfileUser = user;
+                const modal = document.getElementById('contact-profile-modal');
+                
+                document.getElementById('cp-name').textContent = user.username;
+                const statusText = user.isOnline ? 'Online' : (user.lastSeen && user.showLastSeen !== false ? Helpers.formatLastSeen(user.lastSeen) : 'Offline');
+                document.getElementById('cp-status').textContent = statusText;
+                document.getElementById('cp-lastseen').textContent = statusText;
+                document.getElementById('cp-bio').textContent = user.bio || 'Available';
+                
+                const img = document.getElementById('cp-img');
+                const fallbackText = document.getElementById('cp-fallback-text');
+                if (user.photoURL) {
+                    img.src = user.photoURL;
+                    img.classList.remove('hidden');
+                    fallbackText.classList.add('hidden');
+                } else {
+                    img.classList.add('hidden');
+                    fallbackText.classList.remove('hidden');
+                    fallbackText.textContent = user.username.charAt(0).toUpperCase();
+                }
+                
+                const isBlocked = AppState.currentUserData?.blocked?.includes(user.uid);
+                document.getElementById('cp-block-text').textContent = isBlocked ? "Unblock Contact" : "Block Contact";
+                
+                const convId = Helpers.getConversationId(AppState.currentUser.uid, user.uid);
+                const convData = AppState.conversations[convId];
+                document.getElementById('cp-disappearing-select').value = (convData && convData.disappearing !== undefined) ? convData.disappearing.toString() : '0';
+                
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => { modal.classList.remove('translate-x-full'); }, 10);
+            },
+            
+            hideContactProfile() {
+                const modal = document.getElementById('contact-profile-modal');
+                modal.classList.add('translate-x-full');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                    window.activeProfileUser = null;
+                }, 300);
+            },
+
             showLightbox(imgUrl) { const lb = document.getElementById('lightbox-modal'); const img = document.getElementById('lightbox-img'); img.src = imgUrl; lb.classList.remove('hidden'); lb.classList.add('flex'); setTimeout(() => img.classList.replace('scale-95', 'scale-100'), 10); },
             hideLightbox() { const lb = document.getElementById('lightbox-modal'); const img = document.getElementById('lightbox-img'); img.classList.replace('scale-100', 'scale-95'); setTimeout(() => { lb.classList.add('hidden'); lb.classList.remove('flex'); img.src = ''; }, 200); },
 
@@ -1525,10 +1653,15 @@
                     await setDoc(userRef, {
                         uid: user.uid, username: defaultUsername || user.displayName || user.email || 'User', bio: 'Available', email: user.email || '', 
                         photoURL: photoURL || user.photoURL || null, createdAt: new Date().toISOString(), isOnline: true, publicKey: publicKeyB64,
-                        blocked: []
+                        blocked: [], profileViews: 0, showLastSeen: true
                     }, { merge: true });
                     ToastManager.show("Account & Keys securely created!");
-                    if(forceNew) setTimeout(() => location.reload(), 1000);
+                    
+                    AppState.currentUser = user;
+                    AppState.localKeys = { publicKeyB64, privateKeyB64 };
+                    await IdentityService.export();
+                    
+                    if(forceNew) setTimeout(() => location.reload(), 1500);
                 } else { 
                     ToastManager.show("Authentication successful!"); 
                     if(photoURL || user.photoURL) await updateDoc(userRef, { photoURL: photoURL || user.photoURL }); 
@@ -1658,6 +1791,25 @@
             document.getElementById('btn-security-settings')?.addEventListener('click', () => UI.showSecurityModal());
             document.getElementById('btn-security-settings-mobile')?.addEventListener('click', () => { document.getElementById('chat-options-dropdown').classList.add('hidden'); UI.showSecurityModal(); });
             document.getElementById('btn-close-security')?.addEventListener('click', () => UI.hideSecurityModal());
+            
+            document.getElementById('cp-btn-block')?.addEventListener('click', async () => {
+                if (!window.activeProfileUser) return;
+                const isBlocked = AppState.currentUserData?.blocked?.includes(window.activeProfileUser.uid);
+                try {
+                    const newBlocked = isBlocked
+                        ? (AppState.currentUserData.blocked || []).filter(id => id !== window.activeProfileUser.uid)
+                        : [...(AppState.currentUserData.blocked || []), window.activeProfileUser.uid];
+                    await updateDoc(doc(db, FIREBASE_PATHS.USERS, AppState.currentUser.uid), { blocked: newBlocked });
+                    ToastManager.show(isBlocked ? "Contact unblocked" : "Contact blocked");
+                    UI.hideContactProfile();
+                } catch(e) { ToastManager.show("Action failed.", "error"); }
+            });
+
+            document.getElementById('cp-disappearing-select')?.addEventListener('change', async (e) => {
+                if (!window.activeProfileUser) return; 
+                await DataService.setDisappearingTimer(db, Helpers.getConversationId(AppState.currentUser.uid, window.activeProfileUser.uid), parseInt(e.target.value));
+            });
+
             document.getElementById('disappearing-select')?.addEventListener('change', async (e) => {
                 if (!AppState.selectedUser) return; await DataService.setDisappearingTimer(db, Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid), parseInt(e.target.value));
             });
@@ -1681,8 +1833,24 @@
 
             document.getElementById('btn-open-settings')?.addEventListener('click', () => UI.showSettingsModal());
             document.getElementById('btn-close-settings')?.addEventListener('click', () => UI.hideSettingsModal());
-            document.getElementById('btn-modal-logout')?.addEventListener('click', async () => { UI.hideSettingsModal(); await signOut(auth); });
-            document.getElementById('btn-header-logout')?.addEventListener('click', async () => { UI.hideSettingsModal(); await signOut(auth); });
+            
+            const handleLogout = () => {
+                UI.hideSettingsModal();
+                UI.showConfirmModal(
+                    "Confirm Logout",
+                    "Are you sure you want to log out? Make sure your Identity Backup is saved.",
+                    "Log Out",
+                    "text-red-500",
+                    async () => {
+                        if (AppState.currentUser) {
+                            try { await DataService.updatePresence(db, AppState.currentUser.uid, false); } catch(e) {}
+                        }
+                        await signOut(auth); 
+                    }
+                );
+            };
+            document.getElementById('btn-modal-logout')?.addEventListener('click', handleLogout);
+            document.getElementById('btn-header-logout')?.addEventListener('click', handleLogout);
             
             document.querySelectorAll('.theme-toggle-btn').forEach(btn => btn.addEventListener('click', () => ThemeService.toggleMode()));
             
@@ -1701,6 +1869,18 @@
             document.getElementById('btn-export-identity')?.addEventListener('click', () => IdentityService.export());
             document.getElementById('import-identity-input')?.addEventListener('change', (e) => { if (e.target.files.length > 0) IdentityService.import(e.target.files[0], false); });
             document.getElementById('lock-pin-input')?.addEventListener('input', (e) => { if(e.target.value.length === 4) { AppLockService.unlock(e.target.value); } });
+
+            document.getElementById('toggle-last-seen')?.addEventListener('change', async (e) => {
+                if (AppState.currentUser) {
+                    try {
+                        await updateDoc(doc(db, FIREBASE_PATHS.USERS, AppState.currentUser.uid), { showLastSeen: e.target.checked });
+                        ToastManager.show(e.target.checked ? "Last seen is now visible." : "Last seen is now hidden.");
+                    } catch(err) {
+                        ToastManager.show("Failed to update privacy setting.", "error");
+                        e.target.checked = !e.target.checked;
+                    }
+                }
+            });
 
             document.getElementById('settings-avatar-upload')?.addEventListener('change', async (e) => {
                 const file = e.target.files[0];
@@ -1848,8 +2028,12 @@
                     if (user.providerData.some(p => p.providerId === 'password') && !user.emailVerified) return;
                     AppState.currentUser = user;
                     
-                    const localKeys = await KeyManager.getKeysLocally(user.uid);
-                    if (!localKeys) { await checkAndInitializeKeys(user, user.displayName, null, false); return; }
+                    let localKeys = await KeyManager.getKeysLocally(user.uid);
+                    if (!localKeys) { 
+                        await checkAndInitializeKeys(user, user.displayName, null, false); 
+                        localKeys = AppState.localKeys;
+                        if (!localKeys) return; 
+                    }
 
                     AppLockService.init(); 
                     if(window.location.hash === '' || window.location.hash === '#landing' || window.location.hash === '#login' || window.location.hash === '#signup') Router.navigate('app');
@@ -1887,12 +2071,31 @@
             document.addEventListener('visibilitychange', () => { if (AppState.currentUser) DataService.updatePresence(db, AppState.currentUser.uid, document.visibilityState === 'visible'); });
             window.addEventListener('beforeunload', () => { if (AppState.currentUser) DataService.updatePresence(db, AppState.currentUser.uid, false); });
             
+            const checkPWAInstall = () => {
+                if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+                    document.querySelectorAll('button').forEach(b => {
+                        if (b.getAttribute('onclick') === 'window.installApp()') {
+                            b.style.display = 'none';
+                            if (b.previousElementSibling && b.previousElementSibling.textContent.includes('Install App')) {
+                                b.parentElement.style.display = 'none';
+                            }
+                        }
+                    });
+                }
+            };
+            checkPWAInstall();
+            window.addEventListener('appinstalled', checkPWAInstall);
+            
             Router.init();
         });
     </script>
 </head>
 <body class="fixed inset-0 overflow-hidden overscroll-none flex items-center justify-center bg-falconix-dark">
     
+    <div class="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-falconix-primary rounded-full mix-blend-screen filter blur-[120px] opacity-20 pointer-events-none"></div>
+    <div class="fixed bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-falconix-secondary rounded-full mix-blend-screen filter blur-[120px] opacity-20 pointer-events-none"></div>
+    <div id="toast-container" class="fixed top-4 left-4 right-4 sm:left-auto sm:top-6 sm:right-6 z-[500] flex flex-col items-center sm:items-end pointer-events-none"></div>
+
     <main id="view-landing" class="w-full h-full absolute inset-0 z-50 flex flex-col overflow-y-auto bg-gradient-to-br from-[#0a0f1c] via-[#111827] to-[#2e1065] custom-scrollbar">
         <div class="fixed inset-0 z-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiNmZmYiLz48L3N2Zz4=')] opacity-5 animate-pattern-pan pointer-events-none"></div>
         <header class="w-full sticky top-0 z-[100] bg-[#0a0f1c]/80 backdrop-blur-xl border-b border-white/10 shrink-0">
@@ -1980,75 +2183,10 @@
         </footer>
     </main>
 
-    <div id="identity-restore-modal" class="fixed inset-0 z-[250] bg-falconix-dark/95 backdrop-blur-xl hidden flex-col items-center justify-center transition-all duration-300 p-4">
-        <div class="w-full max-w-md bg-gray-900 border border-white/10 rounded-3xl shadow-2xl p-8 text-center animate-slide-up flex flex-col max-h-[85vh] overflow-y-auto custom-scrollbar">
-            <div class="w-20 h-20 mx-auto rounded-full bg-blue-500/20 border-2 border-blue-500 flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(59,130,246,0.3)] shrink-0">
-                <svg class="w-10 h-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-            </div>
-            <h2 class="text-2xl font-bold text-white mb-3">Identity Missing</h2>
-            <p id="identity-warning-text" class="text-sm text-gray-400 mb-8 leading-relaxed transition-colors">We detected a new device or cleared cache. To decrypt your past messages, you must import your Identity Backup file. Generating new keys will render past messages indecipherable.</p>
-            <input type="file" id="restore-file-input" class="hidden" accept=".json">
-            <button onclick="document.getElementById('restore-file-input').click()" class="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold rounded-xl shadow-lg transition-all mb-4 shrink-0">Import Identity Backup (.json)</button>
-            <button id="btn-force-new-keys" data-confirmed="false" class="w-full py-3.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold rounded-xl border border-red-500/20 transition-all text-sm shrink-0">Generate New Keys</button>
-        </div>
-    </div>
-
-    <div id="app-lock-screen" class="fixed inset-0 z-[200] bg-falconix-dark/95 backdrop-blur-xl hidden flex-col items-center justify-center transition-all duration-300">
-        <div class="w-24 h-24 mb-6 rounded-3xl bg-gradient-to-tr from-falconix-primary/20 to-falconix-secondary/20 flex items-center justify-center border border-white/10 shadow-2xl">
-            <svg class="w-10 h-10 text-falconix-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-        </div>
-        <h2 class="text-2xl font-bold text-white mb-2 tracking-tight">App Locked</h2>
-        <p class="text-sm text-gray-400 mb-8">Enter your 4-digit security PIN</p>
-        <input type="password" id="lock-pin-input" maxlength="4" placeholder="••••" class="w-40 text-center text-4xl tracking-[0.3em] bg-black/50 border border-white/10 rounded-2xl px-4 py-4 text-white focus:outline-none focus:border-falconix-primary shadow-inner transition-colors">
-    </div>
-
-    <div id="incoming-call-modal" class="fixed inset-0 z-[150] bg-black/80 backdrop-blur-md hidden items-center justify-center">
-        <div class="bg-gray-900 border border-white/10 rounded-3xl p-8 flex flex-col items-center shadow-2xl animate-slide-up w-80">
-            <div class="w-20 h-20 rounded-full bg-gray-800 border-2 border-falconix-primary flex items-center justify-center mb-4 animate-pulse">
-                <svg class="w-10 h-10 text-falconix-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
-            </div>
-            <h3 id="incoming-call-name" class="text-xl font-bold text-white mb-1">Contact</h3>
-            <p id="incoming-call-type" class="text-sm text-falconix-primary mb-8 tracking-wide">Incoming Call...</p>
-            <div class="flex space-x-6 w-full justify-center">
-                <button id="btn-decline-call" class="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center text-white shadow-lg transition-transform hover:scale-105"><svg class="w-6 h-6 transform rotate-[135deg]" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path></svg></button>
-                <button id="btn-accept-call" class="w-14 h-14 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center text-white shadow-lg transition-transform hover:scale-105 animate-bounce"><svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path></svg></button>
-            </div>
-        </div>
-    </div>
-
-    <div id="call-overlay" class="fixed inset-0 z-[140] bg-gray-900 hidden flex-col">
-        <div class="absolute inset-0 z-0">
-            <video id="remote-video" class="w-full h-full object-cover hidden" autoplay playsinline></video>
-            <div class="absolute inset-0 bg-gradient-to-tr from-falconix-primary/20 to-falconix-secondary/20 flex flex-col items-center justify-center -z-10 backdrop-blur-3xl">
-                <div class="w-32 h-32 rounded-full border-4 border-falconix-primary/30 flex items-center justify-center animate-pulse mb-8">
-                    <svg class="w-12 h-12 text-falconix-primary" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path></svg>
-                </div>
-                <h3 id="call-status-text" class="text-xl font-bold text-white tracking-widest">Connecting Securely...</h3>
-            </div>
-        </div>
-        <div class="absolute top-6 right-6 w-24 h-36 sm:w-32 sm:h-48 bg-black border-2 border-white/20 rounded-xl overflow-hidden z-10 shadow-2xl">
-            <video id="local-video" class="w-full h-full object-cover transform scale-x-[-1]" autoplay playsinline muted></video>
-        </div>
-        <div class="absolute bottom-10 left-0 right-0 flex justify-center z-10">
-            <div class="bg-black px-8 py-4 rounded-full flex items-center space-x-6 border border-gray-800">
-                <button id="btn-mute-call" class="w-12 h-12 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-white transition-colors shadow-lg">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-                </button>
-                <button id="btn-end-call" class="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center text-white shadow-xl transition-transform hover:scale-110">
-                    <svg class="w-6 h-6 transform rotate-[135deg]" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path></svg>
-                </button>
-                <button id="btn-flip-camera" class="w-12 h-12 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-white transition-colors shadow-lg hidden">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div id="toast-container" class="fixed top-4 left-4 right-4 sm:left-auto sm:top-6 sm:right-6 z-[500] flex flex-col items-center sm:items-end pointer-events-none"></div>
-    <div class="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-falconix-primary rounded-full mix-blend-screen filter blur-[120px] opacity-20 pointer-events-none"></div>
-    <div class="fixed bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-falconix-secondary rounded-full mix-blend-screen filter blur-[120px] opacity-20 pointer-events-none"></div>
-
     <main id="view-login" class="hidden w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar p-6 sm:p-10 rounded-2xl sm:rounded-3xl glass-panel relative z-10 mx-4 flex flex-col">
+        <button onclick="window.location.hash='landing'" class="absolute top-4 left-4 sm:top-5 sm:left-5 p-2 text-gray-400 hover:text-white bg-black/20 hover:bg-black/40 rounded-full backdrop-blur-sm transition-colors z-20" title="Back to Home">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
+        </button>
         <div class="flex items-center justify-center space-x-3 mb-8 shrink-0">
             <div class="w-14 h-14 shrink-0 rounded-full border border-white/10 p-1 bg-black/40 shadow-[0_0_20px_rgba(157,78,221,0.2)]">
                 <img src="Falconix_Messenger_Logo.png" alt="Falconix Messenger Logo" class="w-full h-full object-contain">
@@ -2092,6 +2230,9 @@
     </main>
 
     <main id="view-signup" class="hidden w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar p-6 sm:p-10 rounded-2xl sm:rounded-3xl glass-panel relative z-10 mx-4 flex flex-col">
+        <button onclick="window.location.hash='landing'" class="absolute top-4 left-4 sm:top-5 sm:left-5 p-2 text-gray-400 hover:text-white bg-black/20 hover:bg-black/40 rounded-full backdrop-blur-sm transition-colors z-20" title="Back to Home">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
+        </button>
         <div class="text-center mb-8 shrink-0"><h1 class="text-2xl font-bold text-white tracking-tight">Create Account</h1></div>
         <form id="form-signup" class="space-y-5 shrink-0">
             <div>
@@ -2244,6 +2385,70 @@
         </div>
     </main>
 
+    <div id="identity-restore-modal" class="fixed inset-0 z-[250] bg-falconix-dark/95 backdrop-blur-xl hidden flex-col items-center justify-center transition-all duration-300 p-4">
+        <div class="w-full max-w-md bg-gray-900 border border-white/10 rounded-3xl shadow-2xl p-8 text-center animate-slide-up flex flex-col max-h-[85vh] overflow-y-auto custom-scrollbar">
+            <div class="w-20 h-20 mx-auto rounded-full bg-blue-500/20 border-2 border-blue-500 flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(59,130,246,0.3)] shrink-0">
+                <svg class="w-10 h-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+            </div>
+            <h2 class="text-2xl font-bold text-white mb-3">Identity Missing</h2>
+            <p id="identity-warning-text" class="text-sm text-gray-400 mb-8 leading-relaxed transition-colors">We detected a new device or cleared cache. To decrypt your past messages, you must import your Identity Backup file. Generating new keys will render past messages indecipherable.</p>
+            <input type="file" id="restore-file-input" class="hidden" accept=".json">
+            <button onclick="document.getElementById('restore-file-input').click()" class="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold rounded-xl shadow-lg transition-all mb-4 shrink-0">Import Identity Backup (.json)</button>
+            <button id="btn-force-new-keys" data-confirmed="false" class="w-full py-3.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold rounded-xl border border-red-500/20 transition-all text-sm shrink-0">Generate New Keys</button>
+        </div>
+    </div>
+
+    <div id="app-lock-screen" class="fixed inset-0 z-[200] bg-falconix-dark/95 backdrop-blur-xl hidden flex-col items-center justify-center transition-all duration-300">
+        <div class="w-24 h-24 mb-6 rounded-3xl bg-gradient-to-tr from-falconix-primary/20 to-falconix-secondary/20 flex items-center justify-center border border-white/10 shadow-2xl">
+            <svg class="w-10 h-10 text-falconix-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+        </div>
+        <h2 class="text-2xl font-bold text-white mb-2 tracking-tight">App Locked</h2>
+        <p class="text-sm text-gray-400 mb-8">Enter your 4-digit security PIN</p>
+        <input type="password" id="lock-pin-input" maxlength="4" placeholder="••••" class="w-40 text-center text-4xl tracking-[0.3em] bg-black/50 border border-white/10 rounded-2xl px-4 py-4 text-white focus:outline-none focus:border-falconix-primary shadow-inner transition-colors">
+    </div>
+
+    <div id="incoming-call-modal" class="fixed inset-0 z-[150] bg-black/80 backdrop-blur-md hidden items-center justify-center">
+        <div class="bg-gray-900 border border-white/10 rounded-3xl p-8 flex flex-col items-center shadow-2xl animate-slide-up w-80">
+            <div class="w-20 h-20 rounded-full bg-gray-800 border-2 border-falconix-primary flex items-center justify-center mb-4 animate-pulse">
+                <svg class="w-10 h-10 text-falconix-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+            </div>
+            <h3 id="incoming-call-name" class="text-xl font-bold text-white mb-1">Contact</h3>
+            <p id="incoming-call-type" class="text-sm text-falconix-primary mb-8 tracking-wide">Incoming Call...</p>
+            <div class="flex space-x-6 w-full justify-center">
+                <button id="btn-decline-call" class="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center text-white shadow-lg transition-transform hover:scale-105"><svg class="w-6 h-6 transform rotate-[135deg]" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path></svg></button>
+                <button id="btn-accept-call" class="w-14 h-14 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center text-white shadow-lg transition-transform hover:scale-105 animate-bounce"><svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path></svg></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="call-overlay" class="fixed inset-0 z-[140] bg-gray-900 hidden flex-col">
+        <div class="absolute inset-0 z-0">
+            <video id="remote-video" class="w-full h-full object-cover hidden" autoplay playsinline></video>
+            <div class="absolute inset-0 bg-gradient-to-tr from-falconix-primary/20 to-falconix-secondary/20 flex flex-col items-center justify-center -z-10 backdrop-blur-3xl">
+                <div class="w-32 h-32 rounded-full border-4 border-falconix-primary/30 flex items-center justify-center animate-pulse mb-8">
+                    <svg class="w-12 h-12 text-falconix-primary" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path></svg>
+                </div>
+                <h3 id="call-status-text" class="text-xl font-bold text-white tracking-widest">Connecting Securely...</h3>
+            </div>
+        </div>
+        <div class="absolute top-6 right-6 w-24 h-36 sm:w-32 sm:h-48 bg-black border-2 border-white/20 rounded-xl overflow-hidden z-10 shadow-2xl">
+            <video id="local-video" class="w-full h-full object-cover transform scale-x-[-1]" autoplay playsinline muted></video>
+        </div>
+        <div class="absolute bottom-10 left-0 right-0 flex justify-center z-10">
+            <div class="bg-black px-8 py-4 rounded-full flex items-center space-x-6 border border-gray-800">
+                <button id="btn-mute-call" class="w-12 h-12 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-white transition-colors shadow-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                </button>
+                <button id="btn-end-call" class="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center text-white shadow-xl transition-transform hover:scale-110">
+                    <svg class="w-6 h-6 transform rotate-[135deg]" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path></svg>
+                </button>
+                <button id="btn-flip-camera" class="w-12 h-12 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-white transition-colors shadow-lg hidden">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="security-modal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 modal-hidden transition-opacity duration-200 p-4">
         <div id="security-modal-content" class="w-full max-w-md bg-gray-900 border border-gray-800 rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden modal-content-hidden transition-transform duration-300 mx-auto">
             <header class="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
@@ -2270,231 +2475,153 @@
         </div>
     </div>
 
-    <div id="lightbox-modal" class="fixed inset-0 z-[100] bg-black/95 hidden items-center justify-center transition-opacity">
-        <button onclick="window.UI.hideLightbox()" class="absolute top-6 right-6 text-white/50 hover:text-white p-3 bg-gray-800 hover:bg-gray-700 rounded-full transition-all"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-        <img id="lightbox-img" src="" alt="Enlarged Image" class="max-w-[95vw] max-h-[95vh] object-contain rounded-xl shadow-2xl scale-95 transition-transform duration-300">
-    </div>
-
-    <div id="wallpaper-modal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 modal-hidden transition-opacity duration-200 p-4">
-        <div class="w-full max-w-sm bg-gray-900 border border-gray-800 rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden mx-auto">
-            <header class="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
-                <h3 class="text-md font-bold text-white flex items-center"><svg class="w-4 h-4 mr-2 text-falconix-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg> Chat Wallpaper</h3>
-                <button id="btn-close-wallpaper" class="text-gray-400 hover:text-white"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-            </header>
-            <div class="p-5 space-y-4 overflow-y-auto custom-scrollbar bg-[#0a0f1c]">
-                <p class="text-xs text-gray-400 uppercase tracking-wider font-semibold">Premium Gradients</p>
-                <div class="grid grid-cols-4 gap-3">
-                    <button class="wallpaper-preset w-full aspect-square rounded-xl border border-gray-700 hover:ring-2 hover:ring-falconix-primary transition-all shadow-inner" data-bg="linear-gradient(to top, #09203f 0%, #537895 100%)" style="background: linear-gradient(to top, #09203f 0%, #537895 100%)"></button>
-                    <button class="wallpaper-preset w-full aspect-square rounded-xl border border-gray-700 hover:ring-2 hover:ring-falconix-primary transition-all shadow-inner" data-bg="linear-gradient(to right, #141e30, #243b55)" style="background: linear-gradient(to right, #141e30, #243b55)"></button>
-                    <button class="wallpaper-preset w-full aspect-square rounded-xl border border-gray-700 hover:ring-2 hover:ring-falconix-primary transition-all shadow-inner" data-bg="linear-gradient(to right, #240b36, #c31432)" style="background: linear-gradient(to right, #240b36, #c31432)"></button>
-                    <button class="wallpaper-preset w-full aspect-square rounded-xl border border-gray-700 hover:ring-2 hover:ring-falconix-primary transition-all shadow-inner" data-bg="linear-gradient(to bottom, #000000, #434343)" style="background: linear-gradient(to bottom, #000000, #434343)"></button>
-                </div>
-                <p class="text-xs text-gray-400 uppercase tracking-wider font-semibold mt-4">Custom Image</p>
-                <input type="file" id="wallpaper-upload" class="hidden" accept="image/*">
-                <button onclick="document.getElementById('wallpaper-upload').click()" class="w-full py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-sm font-medium transition-colors text-white">Upload from Device</button>
-                <button id="btn-wallpaper-clear" class="w-full py-2.5 mt-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-sm font-medium transition-colors border border-red-500/20">Remove Wallpaper</button>
+    <div id="dp-quick-modal" class="fixed inset-0 z-[160] bg-black/80 hidden items-center justify-center p-4 transition-opacity">
+        <div class="bg-gray-900 border border-gray-800 rounded-3xl w-full max-w-sm flex flex-col shadow-2xl animate-slide-up overflow-hidden p-6 text-center relative">
+            <button onclick="window.UI.hideDpQuickModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+            <div class="w-24 h-24 mx-auto rounded-full bg-gray-800 border-2 border-falconix-primary flex items-center justify-center shadow-lg overflow-hidden mb-4">
+                <img id="dp-quick-img" src="" alt="Profile" class="w-full h-full object-cover hidden">
+                <span id="dp-quick-fallback" class="text-3xl text-white font-bold hidden"><span id="dp-quick-fallback-text"></span></span>
+            </div>
+            <h3 id="dp-quick-name" class="text-xl font-bold text-white mb-4">Contact</h3>
+            <div class="flex justify-center space-x-4">
+                <button onclick="window.UI.hideDpQuickModal(); window.UI.selectUser(window.activeDpUser);" class="p-3 bg-gray-800 hover:bg-gray-700 rounded-full text-falconix-primary transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg></button>
+                <button onclick="window.UI.hideDpQuickModal(); window.CallService.initCall(false);" class="p-3 bg-gray-800 hover:bg-gray-700 rounded-full text-green-400 transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg></button>
+                <button onclick="window.UI.hideDpQuickModal(); window.CallService.initCall(true);" class="p-3 bg-gray-800 hover:bg-gray-700 rounded-full text-green-400 transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg></button>
+                <button onclick="window.UI.hideDpQuickModal(); window.UI.showContactProfile(window.activeDpUser);" class="p-3 bg-gray-800 hover:bg-gray-700 rounded-full text-blue-400 transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></button>
             </div>
         </div>
     </div>
 
-    <div id="settings-modal" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 modal-hidden transition-opacity duration-200 p-4">
-        <div id="settings-modal-content" class="w-full max-w-md bg-gray-900 border border-gray-800 rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden modal-content-hidden transition-transform duration-300 mx-auto">
-            <header class="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
-                <h3 class="text-lg font-bold text-white tracking-tight flex items-center">Settings</h3>
-                <div class="flex items-center space-x-1">
-                    <button id="btn-header-logout" class="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Log Out"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg></button>
-                    <button id="btn-close-settings" class="p-2 text-gray-400 hover:text-white rounded-lg transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-                </div>
+<div id="contact-profile-modal" class="fixed inset-0 z-[170] bg-black/80 hidden items-end sm:items-center justify-center sm:p-4 transition-all duration-300">
+        <div class="bg-gray-900 w-full sm:max-w-sm sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden transform translate-x-full transition-transform duration-300">
+            <header class="p-4 sm:p-6 flex items-center space-x-4 bg-gray-800/50 backdrop-blur-md sticky top-0 z-10 shrink-0">
+                <button onclick="window.UI.hideContactProfile()" class="text-white p-1 hover:bg-white/10 rounded-full transition-colors"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg></button>
+                <h3 class="text-lg font-bold text-white tracking-wide">Contact Info</h3>
             </header>
-            <div class="p-6 space-y-6 overflow-y-auto custom-scrollbar bg-[#0a0f1c]">
+            <div class="flex-1 overflow-y-auto custom-scrollbar bg-[#0a0f1c] pb-8">
+                <div class="flex flex-col items-center pt-8 pb-6 px-4 bg-gray-900 border-b border-gray-800">
+                    <div class="w-32 h-32 rounded-full border-4 border-gray-800 flex items-center justify-center overflow-hidden mb-4 shadow-xl bg-gray-800 cursor-pointer">
+                        <img id="cp-img" src="" alt="Profile" class="w-full h-full object-cover hidden" onclick="window.UI.showLightbox(this.src)">
+                        <span id="cp-fallback-text" class="text-5xl text-white font-bold hidden"></span>
+                    </div>
+                    <h2 id="cp-name" class="text-2xl font-bold text-white mb-1">Name</h2>
+                    <p id="cp-status" class="text-sm text-gray-400"></p>
+                    
+                    <div class="flex space-x-6 mt-6">
+                        <button onclick="window.UI.hideContactProfile(); window.CallService.initCall(false);" class="flex flex-col items-center text-green-400 hover:text-green-300 transition-colors"><div class="p-3 bg-gray-800 rounded-full mb-1"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg></div><span class="text-[10px] uppercase font-bold tracking-wider">Audio</span></button>
+                        <button onclick="window.UI.hideContactProfile(); window.CallService.initCall(true);" class="flex flex-col items-center text-green-400 hover:text-green-300 transition-colors"><div class="p-3 bg-gray-800 rounded-full mb-1"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg></div><span class="text-[10px] uppercase font-bold tracking-wider">Video</span></button>
+                    </div>
+                </div>
                 
-                <div>
-                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Install App</h4>
-                    <button onclick="window.installApp()" class="w-full py-3 bg-gradient-to-r from-emerald-500 to-purple-600 text-white rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.4)] border border-emerald-400/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.6)] font-bold transition-all flex items-center justify-center space-x-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                        <span>Download App</span>
+                <div class="mt-2 bg-gray-900 p-4 border-y border-gray-800">
+                    <p class="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-1">About</p>
+                    <p id="cp-bio" class="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap"></p>
+                    <p class="text-[10px] text-gray-500 mt-2" id="cp-lastseen"></p>
+                </div>
+                
+                <div class="mt-2 bg-gray-900 p-4 border-y border-gray-800">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <p class="text-sm text-white font-medium">Disappearing Messages</p>
+                            <p class="text-xs text-gray-500 mt-0.5">Off</p>
+                        </div>
+                        <select id="cp-disappearing-select" class="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none">
+                            <option value="0">Off</option><option value="60000">1 Minute (Testing)</option><option value="3600000">1 Hour</option><option value="86400000">24 Hours</option>
+                        </select>
+                    </div>
+                    <button onclick="window.UI.hideContactProfile(); window.UI.showSecurityModal();" class="w-full flex justify-between items-center text-left py-2 group">
+                        <div class="flex items-center space-x-3 text-emerald-400">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                            <span class="text-sm font-medium">End-to-End Encryption</span>
+                        </div>
+                        <svg class="w-4 h-4 text-gray-500 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                     </button>
                 </div>
-
-                <div>
-                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Profile Details</h4>
-                    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 space-y-4">
-                        <div class="flex items-center space-x-4">
-                            <div id="settings-avatar-preview" class="w-12 h-12 rounded-full bg-gray-900 border border-gray-700 flex items-center justify-center overflow-hidden shrink-0"><svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>
-                            <div class="flex-1 flex items-center space-x-2">
-                                <input type="file" id="settings-avatar-upload" class="hidden" accept="image/*">
-                                <button onclick="document.getElementById('settings-avatar-upload').click()" class="text-xs bg-gray-700 hover:bg-gray-600 text-white py-1.5 px-3 rounded-lg transition-colors border border-gray-600">Change Avatar</button>
-                                <button id="btn-remove-avatar" class="hidden text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 px-3 rounded-lg transition-colors border border-red-500/20">Remove</button>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] text-gray-500 uppercase mb-1">Name</label>
-                            <input type="text" id="settings-input-username" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-falconix-primary transition-colors">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] text-gray-500 uppercase mb-1">About</label>
-                            <input type="text" id="settings-input-bio" placeholder="Available" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-falconix-primary transition-colors">
-                        </div>
-                        <button id="btn-save-profile" class="w-full mt-2 py-2 bg-falconix-primary hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition-colors">Save Profile</button>
-                    </div>
-                </div>
-
-                <div>
-                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Local Device Security</h4>
-                    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-white">App Lock (Passcode)</p><p class="text-xs text-gray-400 mt-0.5">Require a PIN to access this app.</p>
-                        </div>
-                        <button id="btn-setup-pin" class="text-xs bg-falconix-primary/20 hover:bg-falconix-primary/40 text-falconix-primary py-1.5 px-3 rounded-lg transition-colors border border-falconix-primary/30 shrink-0">Setup PIN</button>
-                    </div>
-                </div>
-
-                <div>
-                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Accent Theme</h4>
-                    <div class="flex items-center space-x-3 bg-gray-800 border border-gray-700 rounded-xl p-4">
-                        <button onclick="window.ThemeService.apply('default')" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00a3ff] to-[#9d4edd] ring-2 ring-transparent hover:ring-gray-400 transition-all"></button>
-                        <button onclick="window.ThemeService.apply('emerald')" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#10b981] to-[#fbbf24] ring-2 ring-transparent hover:ring-gray-400 transition-all"></button>
-                        <button onclick="window.ThemeService.apply('crimson')" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#e11d48] to-[#f43f5e] ring-2 ring-transparent hover:ring-gray-400 transition-all"></button>
-                        <button onclick="window.ThemeService.apply('monochrome')" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#9ca3af] to-[#4b5563] ring-2 ring-transparent hover:ring-gray-400 transition-all"></button>
-                    </div>
-                </div>
-
-                <div>
-                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Appearance Mode</h4>
-                    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-white">Light Mode</p>
-                            <p class="text-xs text-gray-400 mt-0.5">Toggle between light and dark themes.</p>
-                        </div>
-                        <button class="theme-toggle-btn text-xs bg-falconix-primary hover:bg-blue-600 text-white py-1.5 px-3 rounded-lg transition-colors border border-transparent shadow-sm shrink-0">Toggle Theme</button>
-                    </div>
-                </div>
                 
-                <div>
-                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Cryptographic Status</h4>
-                    <div class="bg-gray-800 border border-green-500/30 rounded-xl p-4 flex items-start space-x-3">
-                        <svg class="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                        <div>
-                            <p class="text-sm font-medium text-green-400">Keys Secured Locally</p>
-                            <p class="text-xs text-gray-400 mt-1 leading-relaxed">Your RSA-2048 private key is locked securely within this browser's IndexedDB.</p>
-                            <div class="flex space-x-2 mt-3">
-                                <button id="btn-export-identity" class="text-xs bg-gray-700 hover:bg-gray-600 text-white py-1.5 px-3 rounded-lg transition-colors border border-gray-600 shadow-sm">Export Backup</button>
-                                <input type="file" id="import-identity-input" class="hidden" accept=".json">
-                                <button onclick="document.getElementById('import-identity-input').click()" class="text-xs bg-gray-700 hover:bg-gray-600 text-white py-1.5 px-3 rounded-lg transition-colors border border-gray-600 shadow-sm">Import Backup</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Help & Feedback</h4>
-                    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-white">Send Feedback</p>
-                            <p class="text-xs text-gray-400 mt-0.5">Report bugs or suggest features.</p>
-                        </div>
-                        <button onclick="window.UI.showFeedbackModal(); window.UI.hideSettingsModal();" class="text-xs bg-gray-700 hover:bg-gray-600 text-white py-1.5 px-3 rounded-lg transition-colors border border-gray-600 shadow-sm shrink-0">Open Form</button>
-                    </div>
-                </div>
-
-                <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 space-y-3">
-                    <div><p class="text-[10px] text-gray-500 uppercase">Registered Email</p><p id="profile-email" class="text-sm font-medium text-white"></p></div>
-                    <div><p class="text-[10px] text-gray-500 uppercase">System ID</p><p id="profile-uid" class="text-xs font-mono text-falconix-primary break-all"></p></div>
+                <div class="mt-6 px-4">
+                    <button id="cp-btn-block" class="w-full py-3.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold rounded-xl border border-red-500/20 transition-all text-sm flex items-center justify-center space-x-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                        <span id="cp-block-text">Block Contact</span>
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="message-context-menu" class="fixed z-[80] w-48 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl py-2 context-menu-hidden transition-all duration-150 origin-top-left flex flex-col">
-        <div class="flex justify-around p-2 border-b border-gray-800 bg-gray-800">
-            <button class="emoji-react-btn text-xl sm:text-lg hover:scale-125 transition-transform p-1">👍</button>
-            <button class="emoji-react-btn text-xl sm:text-lg hover:scale-125 transition-transform p-1">❤️</button>
-            <button class="emoji-react-btn text-xl sm:text-lg hover:scale-125 transition-transform p-1">😂</button>
-            <button class="emoji-react-btn text-xl sm:text-lg hover:scale-125 transition-transform p-1">😮</button>
-        </div>
-        <button id="ctx-btn-reply" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-falconix-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg><span>Reply Securely</span></button>
-        <button id="ctx-btn-forward" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg><span>Forward Message</span></button>
-        <button id="ctx-btn-edit" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg><span>Edit Message</span></button>
-        <button id="ctx-btn-copy" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg><span>Copy Text</span></button>
-        <button id="ctx-btn-pin" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-falconix-primary" fill="currentColor" viewBox="0 0 24 24"><path d="M16 11V7c0-2.206-1.794-4-4-4S8 4.794 8 7v4H6v2h5v7h2v-7h5v-2h-2zm-6-4c0-1.103.897-2 2-2s2 .897 2 2v4h-4V7z"></path></svg><span>Pin Securely</span></button>
-        <button id="ctx-btn-inspect" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg><span>Inspect Encryption</span></button>
-        <div class="h-px bg-gray-800 my-1"></div>
-        <button id="ctx-btn-delete" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-red-400 hover:bg-gray-800 hover:text-red-300 flex items-center space-x-3 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span>Delete for Everyone</span></button>
-    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('btn-dp-chat')?.addEventListener('click', () => {
+                if(window.activeDpUser) {
+                    UI.hideDpQuickModal();
+                    Router.navigate(`app/chat/${window.activeDpUser.uid}`);
+                }
+            });
+            document.getElementById('btn-dp-call')?.addEventListener('click', () => {
+                if(window.activeDpUser) {
+                    UI.hideDpQuickModal();
+                    UI.selectUser(window.activeDpUser);
+                    CallService.initCall(false);
+                }
+            });
+            document.getElementById('btn-dp-video')?.addEventListener('click', () => {
+                if(window.activeDpUser) {
+                    UI.hideDpQuickModal();
+                    UI.selectUser(window.activeDpUser);
+                    CallService.initCall(true);
+                }
+            });
+            document.getElementById('btn-dp-info')?.addEventListener('click', () => {
+                if(window.activeDpUser) {
+                    UI.hideDpQuickModal();
+                    UI.showContactProfile(window.activeDpUser);
+                }
+            });
 
-    <div id="crypto-inspector-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 modal-hidden transition-opacity duration-200 p-4">
-        <div id="crypto-inspector-content" class="w-full max-w-lg bg-gray-900 border border-gray-800 rounded-3xl shadow-2xl overflow-hidden modal-content-hidden transition-transform duration-300 flex flex-col max-h-[90vh]">
-            <header class="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
-                <h3 class="text-md font-bold text-white flex items-center"><svg class="w-5 h-5 mr-2 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg> Cryptographic Inspector</h3>
-                <button id="btn-close-inspector" class="text-gray-400 hover:text-white"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-            </header>
-            <div class="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1 bg-[#0a0c10]">
-                <p class="text-xs text-gray-400 mb-2 leading-relaxed">This is the exact payload retrieved from the server. Without your local RSA private key, this data is mathematically impossible to decrypt.</p>
-                <div>
-                    <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1 block">Ciphertext (AES-256-GCM)</span>
-                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3 font-mono text-xs text-gray-300 break-all h-24 overflow-y-auto custom-scrollbar shadow-inner" id="inspect-ciphertext"></div>
-                </div>
-                <div>
-                    <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1 block">Initialization Vector (IV)</span>
-                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3 font-mono text-xs text-gray-300 break-all shadow-inner" id="inspect-iv"></div>
-                </div>
-                <div>
-                    <span class="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-1 block">Encrypted AES Key (RSA-OAEP)</span>
-                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3 font-mono text-xs text-gray-300 break-all h-24 overflow-y-auto custom-scrollbar shadow-inner" id="inspect-aeskey"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="forward-modal" class="fixed inset-0 z-[110] bg-black/80 hidden items-center justify-center p-4">
-        <div class="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-sm flex flex-col shadow-2xl overflow-hidden animate-slide-up max-h-[85vh]">
-            <header class="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
-                <h3 class="text-white font-bold text-sm tracking-wide">Forward to Contact</h3>
-                <button onclick="window.UI.hideForwardModal()" class="text-gray-400 hover:text-white"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-            </header>
-            <div id="forward-user-list" class="flex-1 overflow-y-auto custom-scrollbar bg-[#0a0f1c]"></div>
-        </div>
-    </div>
-    
-    <div id="confirm-modal" class="fixed inset-0 z-[400] bg-black/80 hidden items-center justify-center p-4 transition-opacity">
-        <div class="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-sm flex flex-col shadow-2xl animate-slide-up overflow-hidden">
-            <div class="p-6">
-                <h3 id="confirm-modal-title" class="text-white font-bold text-lg mb-2">Confirm Action</h3>
-                <p id="confirm-modal-desc" class="text-sm text-gray-400">Are you sure you want to proceed?</p>
-            </div>
-            <div class="flex border-t border-gray-800">
-                <button id="btn-confirm-cancel" class="flex-1 py-3 text-sm font-medium text-gray-400 hover:bg-gray-800 transition-colors border-r border-gray-800">Cancel</button>
-                <button id="btn-confirm-proceed" class="flex-1 py-3 text-sm font-bold transition-colors">Confirm</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="feedback-modal" class="fixed inset-0 z-[150] bg-black/80 hidden items-center justify-center p-4 transition-opacity">
-        <div class="bg-gray-900 border border-gray-800 rounded-3xl w-full max-w-md flex flex-col shadow-2xl animate-slide-up overflow-hidden">
-            <header class="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
-                <h3 class="text-white font-bold text-lg">Help & Feedback</h3>
-                <button onclick="window.UI.hideFeedbackModal()" class="text-gray-400 hover:text-red-500 transition-colors"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-            </header>
-            <div class="p-6 space-y-4 bg-[#0a0f1c]">
-                <div>
-                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Feedback Type</label>
-                    <select id="feedback-type" class="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 custom-scrollbar">
-                        <option value="bug">Report a Bug</option>
-                        <option value="feature">Feature Request</option>
-                        <option value="general">General Feedback</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Description</label>
-                    <textarea id="feedback-desc" rows="4" placeholder="Please describe your issue or idea in detail..." class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-green-500 resize-none custom-scrollbar"></textarea>
-                </div>
-            </div>
-            <div class="flex border-t border-gray-800 bg-gray-900 p-4 space-x-3">
-                <button onclick="window.UI.hideFeedbackModal()" class="flex-1 py-3 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors shadow-lg">Cancel</button>
-                <button id="btn-submit-feedback" class="flex-1 py-3 text-sm font-bold text-white bg-green-500 hover:bg-green-600 rounded-xl transition-colors shadow-lg">Submit Feedback</button>
-            </div>
-        </div>
-    </div>
+            document.getElementById('btn-cp-chat')?.addEventListener('click', () => {
+                if(window.activeProfileUser) {
+                    UI.hideContactProfile();
+                    Router.navigate(`app/chat/${window.activeProfileUser.uid}`);
+                }
+            });
+            document.getElementById('btn-cp-audio')?.addEventListener('click', () => {
+                if(window.activeProfileUser) {
+                    UI.hideContactProfile();
+                    UI.selectUser(window.activeProfileUser);
+                    CallService.initCall(false);
+                }
+            });
+            document.getElementById('btn-cp-video')?.addEventListener('click', () => {
+                if(window.activeProfileUser) {
+                    UI.hideContactProfile();
+                    UI.selectUser(window.activeProfileUser);
+                    CallService.initCall(true);
+                }
+            });
+            document.getElementById('btn-cp-block')?.addEventListener('click', async () => {
+                if (!window.activeProfileUser) return;
+                const u = window.activeProfileUser;
+                const isBlocked = AppState.currentUserData?.blocked?.includes(u.uid);
+                try {
+                    const newBlocked = isBlocked
+                        ? (AppState.currentUserData.blocked || []).filter(id => id !== u.uid)
+                        : [...(AppState.currentUserData.blocked || []), u.uid];
+                    const btnBlockInSecurity = document.getElementById('btn-block-contact');
+                    if(btnBlockInSecurity) btnBlockInSecurity.click();
+                    
+                    document.getElementById('cp-block-text').textContent = isBlocked ? "Block Contact" : "Unblock Contact";
+                } catch(e) { ToastManager.show("Action failed.", "error"); }
+            });
+            document.getElementById('cp-disappearing-select')?.addEventListener('change', async (e) => {
+                if (!window.activeProfileUser) return;
+                const securitySelect = document.getElementById('disappearing-select');
+                if(securitySelect) {
+                    securitySelect.value = e.target.value;
+                    securitySelect.dispatchEvent(new Event('change'));
+                }
+                ToastManager.show("Timer updated for this chat.");
+            });
+        });
+    </script>
 
 </body>
 </html>
