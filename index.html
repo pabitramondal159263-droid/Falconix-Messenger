@@ -91,6 +91,30 @@
         audio { height: 36px; border-radius: 20px; outline: none; }
         audio::-webkit-media-controls-panel { background-color: rgba(255, 255, 255, 0.1); }
         audio::-webkit-media-controls-current-time-display, audio::-webkit-media-controls-time-remaining-display { color: #fff; }
+
+        html:not(.dark) {
+            --glass-bg-dark: rgba(255, 255, 255, 0.65);
+            --glass-border-dark: rgba(0, 0, 0, 0.1);
+        }
+        html:not(.dark) body { background-image: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); color: #0f172a; }
+        html:not(.dark) .bg-gray-900 { background-color: #ffffff; }
+        html:not(.dark) .bg-gray-800 { background-color: #f1f5f9; }
+        html:not(.dark) .bg-gray-700 { background-color: #e2e8f0; }
+        html:not(.dark) .border-gray-800, html:not(.dark) .border-gray-700 { border-color: #cbd5e1; }
+        html:not(.dark) .text-white:not(button, button *, a, a *, .bg-gradient-to-r *, .bg-falconix-primary *, .bg-red-500 *, .bg-green-500 *) { color: #0f172a; }
+        html:not(.dark) .text-gray-400 { color: #475569; }
+        html:not(.dark) .text-gray-300, html:not(.dark) .text-gray-200, html:not(.dark) .text-gray-100 { color: #334155; }
+        html:not(.dark) .text-gray-500 { color: #64748b; }
+        html:not(.dark) .bg-\[\#0a0f1c\] { background-color: #f8fafc; }
+        html:not(.dark) .bg-\[\#0a0f1c\]\/80 { background-color: rgba(255,255,255,0.9); }
+        html:not(.dark) .bg-falconix-dark { background-color: #f8fafc; }
+        html:not(.dark) input, html:not(.dark) textarea, html:not(.dark) select { background-color: #ffffff; color: #0f172a; border-color: #cbd5e1; }
+        html:not(.dark) .hover\:bg-gray-800:hover { background-color: #e2e8f0; }
+        html:not(.dark) .border-white\/10, html:not(.dark) .border-white\/5 { border-color: rgba(0,0,0,0.1); }
+        html:not(.dark) .bg-black\/40, html:not(.dark) .bg-black\/50, html:not(.dark) .bg-black\/80 { background-color: rgba(255,255,255,0.9); }
+        html:not(.dark) .bg-black { background-color: #ffffff; }
+        html:not(.dark) .dark-icon { display: none; }
+        html.dark .light-icon { display: none; }
     </style>
 
     <script type="module" id="falconix-core">
@@ -99,7 +123,7 @@
         import { 
             getAuth, signInWithCustomToken, onAuthStateChanged, 
             createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut,
-            GoogleAuthProvider, signInWithPopup
+            GoogleAuthProvider, signInWithPopup, sendEmailVerification, updateProfile
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, arrayUnion
@@ -111,6 +135,7 @@
             CONVERSATIONS: `artifacts/${APP_ID}/public/data/conversations`,
             CALLS: `artifacts/${APP_ID}/public/data/calls`,
             MESSAGES: (convId) => `artifacts/${APP_ID}/public/data/conversations/${convId}/messages`,
+            FEEDBACK: `artifacts/${APP_ID}/public/data/feedbacks`
         };
 
         const Helpers = {
@@ -349,7 +374,19 @@
                 document.documentElement.style.setProperty('--theme-primary', theme.p); document.documentElement.style.setProperty('--theme-secondary', theme.s);
                 localStorage.setItem('falconix_theme', themeKey);
             },
-            init() { const saved = localStorage.getItem('falconix_theme') || 'default'; this.apply(saved); }
+            toggleMode() {
+                const html = document.documentElement;
+                if (html.classList.contains('dark')) {
+                    html.classList.remove('dark'); localStorage.setItem('falconix_mode', 'light');
+                } else {
+                    html.classList.add('dark'); localStorage.setItem('falconix_mode', 'dark');
+                }
+            },
+            init() { 
+                const saved = localStorage.getItem('falconix_theme') || 'default'; this.apply(saved); 
+                const savedMode = localStorage.getItem('falconix_mode') || 'dark';
+                if(savedMode === 'light') document.documentElement.classList.remove('dark');
+            }
         };
         window.ThemeService = ThemeService;
 
@@ -512,6 +549,19 @@
                     const payload = { username, bio }; if (photoBase64) payload.photoURL = photoBase64;
                     await updateDoc(doc(db, FIREBASE_PATHS.USERS, uid), payload); ToastManager.show("Profile updated successfully!");
                 } catch(e) { ToastManager.show("Failed to update profile.", "error"); }
+            },
+            async submitFeedback(db, type, description) {
+                try {
+                    const payload = {
+                        type, description, timestamp: serverTimestamp(),
+                        uid: AppState.currentUser ? AppState.currentUser.uid : 'anonymous',
+                        email: AppState.currentUser ? AppState.currentUser.email : 'anonymous'
+                    };
+                    await addDoc(collection(db, FIREBASE_PATHS.FEEDBACK), payload);
+                    ToastManager.show("Feedback submitted successfully!");
+                } catch (e) {
+                    ToastManager.show("Failed to submit feedback.", "error");
+                }
             }
         };
 
@@ -1428,6 +1478,9 @@
                 modal.classList.remove('hidden'); modal.classList.add('flex');
             },
 
+            showFeedbackModal() { document.getElementById('feedback-modal').classList.remove('hidden'); document.getElementById('feedback-modal').classList.add('flex'); },
+            hideFeedbackModal() { document.getElementById('feedback-modal').classList.add('hidden'); document.getElementById('feedback-modal').classList.remove('flex'); },
+
             escapeHTML(str) { if(!str) return ''; return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])); }
         };
         window.UI = UI;
@@ -1468,7 +1521,7 @@
                     await KeyManager.saveKeysLocally(user.uid, privateKeyB64, publicKeyB64);
                     
                     await setDoc(userRef, {
-                        uid: user.uid, username: defaultUsername || user.email || 'User', bio: 'Available', email: user.email || '', 
+                        uid: user.uid, username: defaultUsername || user.displayName || user.email || 'User', bio: 'Available', email: user.email || '', 
                         photoURL: photoURL || user.photoURL || null, createdAt: new Date().toISOString(), isOnline: true, publicKey: publicKeyB64,
                         blocked: []
                     }, { merge: true });
@@ -1482,13 +1535,27 @@
 
             document.getElementById('form-login')?.addEventListener('submit', async (e) => {
                 e.preventDefault(); const btn = document.getElementById('btn-login'); btn.disabled = true; btn.textContent = 'Authenticating...';
-                try { await signInWithEmailAndPassword(auth, document.getElementById('login-email').value, document.getElementById('login-password').value); } 
+                try { 
+                    const cred = await signInWithEmailAndPassword(auth, document.getElementById('login-email').value, document.getElementById('login-password').value);
+                    if (!cred.user.emailVerified) {
+                        await sendEmailVerification(cred.user);
+                        await signOut(auth);
+                        throw new Error("Email not verified. A new verification link has been sent.");
+                    }
+                } 
                 catch (err) { ToastManager.show(err.message.replace('Firebase: ', ''), 'error'); } finally { btn.disabled = false; btn.textContent = 'Log In'; }
             });
 
             document.getElementById('form-signup')?.addEventListener('submit', async (e) => {
                 e.preventDefault(); const btn = document.getElementById('btn-signup'); btn.disabled = true; btn.textContent = 'Authenticating...';
-                try { const cred = await createUserWithEmailAndPassword(auth, document.getElementById('signup-email').value, document.getElementById('signup-password').value); await checkAndInitializeKeys(cred.user, document.getElementById('signup-username').value); } 
+                try { 
+                    const cred = await createUserWithEmailAndPassword(auth, document.getElementById('signup-email').value, document.getElementById('signup-password').value); 
+                    await updateProfile(cred.user, { displayName: document.getElementById('signup-username').value });
+                    await sendEmailVerification(cred.user);
+                    await signOut(auth);
+                    ToastManager.show("Verification email sent! Check your inbox to continue.", "success");
+                    Router.navigate('login');
+                } 
                 catch (err) { ToastManager.show(err.message.replace('Firebase: ', ''), 'error'); } finally { btn.disabled = false; btn.textContent = 'Initialize Keys & Sign Up'; }
             });
 
@@ -1615,6 +1682,8 @@
             document.getElementById('btn-modal-logout')?.addEventListener('click', async () => { UI.hideSettingsModal(); await signOut(auth); });
             document.getElementById('btn-header-logout')?.addEventListener('click', async () => { UI.hideSettingsModal(); await signOut(auth); });
             
+            document.querySelectorAll('.theme-toggle-btn').forEach(btn => btn.addEventListener('click', () => ThemeService.toggleMode()));
+            
             document.getElementById('btn-setup-pin')?.addEventListener('click', () => {
                 const current = localStorage.getItem('falconix_pin');
                 if(current) { AppLockService.togglePin(null); } else { 
@@ -1656,6 +1725,19 @@
                     document.getElementById('settings-avatar-upload').value = '';
                     ToastManager.show("Avatar removed successfully.");
                 } catch(e) { ToastManager.show("Failed to remove avatar.", "error"); }
+            });
+
+            document.getElementById('btn-submit-feedback')?.addEventListener('click', async () => {
+                const type = document.getElementById('feedback-type').value;
+                const desc = document.getElementById('feedback-desc').value;
+                if (!desc.trim()) return ToastManager.show("Description cannot be empty.", "error");
+                
+                const btn = document.getElementById('btn-submit-feedback');
+                btn.disabled = true; btn.textContent = 'Submitting...';
+                await DataService.submitFeedback(db, type, desc);
+                btn.disabled = false; btn.textContent = 'Submit';
+                document.getElementById('feedback-desc').value = '';
+                UI.hideFeedbackModal();
             });
 
             document.getElementById('btn-start-audio-call')?.addEventListener('click', () => CallService.initCall(false));
@@ -1743,10 +1825,11 @@
 
             onAuthStateChanged(auth, async (user) => {
                 if (user && !user.isAnonymous) {
+                    if (user.providerData.some(p => p.providerId === 'password') && !user.emailVerified) return;
                     AppState.currentUser = user;
                     
                     const localKeys = await KeyManager.getKeysLocally(user.uid);
-                    if (!localKeys) { await checkAndInitializeKeys(user, null, null, false); return; }
+                    if (!localKeys) { await checkAndInitializeKeys(user, user.displayName, null, false); return; }
 
                     AppLockService.init(); 
                     if(window.location.hash === '' || window.location.hash === '#landing' || window.location.hash === '#login' || window.location.hash === '#signup') Router.navigate('app');
@@ -1802,6 +1885,10 @@
                     </div>
                 </div>
                 <nav class="flex items-center space-x-4 sm:space-x-6">
+                    <button class="theme-toggle-btn p-2 text-gray-400 hover:text-white transition-colors" title="Toggle Light/Dark Mode">
+                        <svg class="w-5 h-5 light-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                        <svg class="w-5 h-5 dark-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                    </button>
                     <a href="#login" class="text-sm font-medium text-gray-300 hover:text-white transition-colors hidden sm:block">Log In</a>
                     <button onclick="window.installApp()" class="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-emerald-500 to-purple-600 text-white text-sm font-bold rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.5)] border border-emerald-400/50 hover:shadow-[0_0_25px_rgba(16,185,129,0.8)] hover:-translate-y-0.5 transform transition-all flex items-center space-x-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
@@ -1855,6 +1942,13 @@
                 </div>
             </div>
         </section>
+        
+        <section class="w-full max-w-6xl mx-auto p-4 sm:p-6 mb-8 text-center bg-gray-900/50 rounded-2xl border border-white/10 z-10 relative">
+            <h3 class="text-white font-bold mb-2">Help Us Improve</h3>
+            <p class="text-xs text-gray-400 mb-4 max-w-md mx-auto">Spot a bug or have a feature request? Let us know! Your feedback helps shape the future of Falconix.</p>
+            <button onclick="window.UI.showFeedbackModal()" class="px-6 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium rounded-xl transition-colors border border-gray-700 shadow-sm">Report & Feedback</button>
+        </section>
+
         <footer class="w-full max-w-6xl mx-auto p-4 sm:px-6 border-t border-white/10 z-10 relative mt-auto shrink-0 pb-6 text-xs text-gray-500">
             <div class="flex flex-col sm:flex-row justify-between items-center">
                 <p>&copy; 2026 Falconix Messenger. All rights reserved.</p>
@@ -2244,6 +2338,17 @@
                         <button onclick="window.ThemeService.apply('monochrome')" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#9ca3af] to-[#4b5563] ring-2 ring-transparent hover:ring-gray-400 transition-all"></button>
                     </div>
                 </div>
+
+                <div>
+                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Appearance Mode</h4>
+                    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-white">Light Mode</p>
+                            <p class="text-xs text-gray-400 mt-0.5">Toggle between light and dark themes.</p>
+                        </div>
+                        <button class="theme-toggle-btn text-xs bg-falconix-primary hover:bg-blue-600 text-white py-1.5 px-3 rounded-lg transition-colors border border-transparent shadow-sm shrink-0">Toggle Theme</button>
+                    </div>
+                </div>
                 
                 <div>
                     <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Cryptographic Status</h4>
@@ -2260,6 +2365,18 @@
                         </div>
                     </div>
                 </div>
+
+                <div>
+                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Help & Feedback</h4>
+                    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-white">Send Feedback</p>
+                            <p class="text-xs text-gray-400 mt-0.5">Report bugs or suggest features.</p>
+                        </div>
+                        <button onclick="window.UI.showFeedbackModal(); window.UI.hideSettingsModal();" class="text-xs bg-gray-700 hover:bg-gray-600 text-white py-1.5 px-3 rounded-lg transition-colors border border-gray-600 shadow-sm shrink-0">Open Form</button>
+                    </div>
+                </div>
+
                 <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 space-y-3">
                     <div><p class="text-[10px] text-gray-500 uppercase">Registered Email</p><p id="profile-email" class="text-sm font-medium text-white"></p></div>
                     <div><p class="text-[10px] text-gray-500 uppercase">System ID</p><p id="profile-uid" class="text-xs font-mono text-falconix-primary break-all"></p></div>
