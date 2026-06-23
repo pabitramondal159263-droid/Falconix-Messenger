@@ -94,6 +94,7 @@
 
     <script type="module" id="falconix-core">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app-check.js";
         import { 
             getAuth, signInWithCustomToken, onAuthStateChanged, 
             createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut,
@@ -391,6 +392,12 @@
         };
 
         const app = initializeApp(firebaseConfig);
+
+        const appCheck = initializeAppCheck(app, {
+            provider: new ReCaptchaEnterpriseProvider('6Leooy4tAAAAAGfjjmpX8XQAiGowCsGscoq7WD0s'),
+            isTokenAutoRefreshEnabled: true
+        });
+
         const auth = getAuth(app);
         const db = getFirestore(app);
 
@@ -1631,8 +1638,8 @@
             <div class="flex flex-col sm:flex-row justify-between items-center">
                 <p>&copy; 2026 Falconix Messenger. All rights reserved.</p>
                 <div class="flex space-x-4 mt-4 sm:mt-0">
-                    <a href="#privacy" class="hover:text-white transition-colors">Privacy Policy</a>
-                    <a href="#terms" class="hover:text-white transition-colors">Terms of Service</a>
+                    <a href="privacy-policy.html" class="hover:text-white transition-colors">Privacy Policy</a>
+                    <a href="terms-and-conditions.html" class="hover:text-white transition-colors">Terms of Service</a>
                 </div>
             </div>
         </footer>
