@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<urlset
+    xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+    xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+
+    <!-- Homepage -->
+    <url>
+        <loc>https://falconixmessenger.netlify.app/</loc>
+        <lastmod>2026-06-23</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>1.0</priority>
+
+        <image:image>
+            <image:loc>https://i.ibb.co/7Nz80xdL/Falconix-Digital-Logo.png</image:loc>
+            <image:title>Falconix Messenger Logo</image:title>
+            <image:caption>Falconix Messenger - Secure End-to-End Encrypted Messaging Platform</image:caption>
+        </image:image>
+
+        <image:image>
+            <image:loc>https://falconixmessenger.netlify.app/e2ee_explanation_4_3_Falconix_Messenger.jpeg</image:loc>
+            <image:title>How End-to-End Encryption Works</image:title>
+            <image:caption>Illustration showing encrypted messages being securely transmitted through a zero-knowledge server in Falconix Messenger.</image:caption>
+        </image:image>
+    </url>
+
+    <!-- Privacy Policy -->
+    <url>
+        <loc>https://falconixmessenger.netlify.app/privacy-policy.html</loc>
+        <lastmod>2026-06-23</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+
+    <!-- Terms and Conditions -->
+    <url>
+        <loc>https://falconixmessenger.netlify.app/terms-and-conditions.html</loc>
+        <lastmod>2026-06-23</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+
+</urlset>
