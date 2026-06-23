@@ -1,0 +1,33 @@
+# robots.txt for Falconix Messenger
+# https://falconixmessenger.netlify.app/
+
+User-agent: *
+Allow: /
+
+# Private pages
+Disallow: /admin.html
+Disallow: /login.html
+Disallow: /signup.html
+Disallow: /chat/
+Disallow: /app/
+Disallow: /messages/
+Disallow: /settings/
+Disallow: /profile/
+Disallow: /dashboard/
+Disallow: /account/
+Disallow: /notifications/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /private/
+
+# Sensitive file types
+Disallow: /*.env$
+Disallow: /*.json$
+Disallow: /*.md$
+Disallow: /*.log$
+Disallow: /*.bak$
+Disallow: /*.sql$
+Disallow: /*.zip$
+
+# Sitemap
+Sitemap: https://falconixmessenger.netlify.app/sitemap.xml
