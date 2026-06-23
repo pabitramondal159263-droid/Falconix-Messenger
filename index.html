@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+    <meta name="google-site-verification" content="RqkFtJwkw3aEbnMYzHFDuhelrU1fER2lUPbE7mKriQ0" />
     <title>Falconix Messenger – Secure End-to-End Encrypted Messaging</title>
     <meta name="description" content="Falconix Messenger is a free end-to-end encrypted messaging app with private chat, voice calls, video calls, and secure file sharing.">
     <meta name="keywords" content="Falconix Messenger, End-to-End Encrypted Messenger, Secure Messaging App, Private Chat App, Encrypted Messenger, Secure Chat Application, Instant Messaging App, Free Messaging App, Online Chat Platform, Cross-Platform Messenger, Best End-to-End Encrypted Messenger, Best Secure Messaging App, Privacy-Focused Messenger, Secure Chat for Everyone, Free Secure Chat App, Browser-Based Messenger, Web Messenger, Secure Communication Platform, Private Online Messenger, Secure Messaging Website, End-to-End Encryption (E2EE), AES-256 Encryption, Zero-Knowledge Messaging, Encrypted Chat, Secure File Sharing, Encrypted Voice Calls, Encrypted Video Calls, Private Messaging, Secure File Transfer, Privacy First Messaging, Real-Time Messaging, Group Chat, Voice Messages, Video Calling, Voice Calling, File Sharing, Message Reactions, Read Receipts, Typing Indicator, Online Status, Multi-Device Sync, Progressive Web App Messenger, What is End-to-End Encryption?, How Secure Messaging Works, How to Protect Your Privacy Online, WhatsApp vs Falconix Messenger, Signal vs Falconix Messenger, Best Secure Chat Apps, Why End-to-End Encryption Matters, How Encrypted Messaging Works, Safe Messaging Tips, Private Communication Guide, Free End-to-End Encrypted Messaging App, Secure Web Messenger Without Ads, Private Chat App with End-to-End Encryption, Best Alternative to Popular Messaging Apps, Secure Messaging Platform for Teams, Browser-Based End-to-End Encrypted Chat, Privacy-Focused Instant Messaging Platform, Secure Chat App for Students, Encrypted Messaging for Business, Safe Online Communication Platform">
@@ -169,14 +170,47 @@
             static show(message, type = 'success') {
                 const container = document.getElementById('toast-container');
                 const toast = document.createElement('div');
-                const bgColor = type === 'error' ? 'bg-red-500/90' : 'bg-emerald-500/90';
-                toast.className = `p-4 mb-3 rounded-xl shadow-lg text-white text-sm font-medium backdrop-blur-md animate-slide-up border border-white/10 ${bgColor}`;
+                const bgColor = type === 'error' ? 'bg-red-600' : 'bg-emerald-600';
+                toast.className = `p-4 mb-3 rounded-xl shadow-lg text-white text-sm font-medium animate-slide-up border border-white/10 ${bgColor} touch-none`;
                 toast.textContent = message;
+                
+                let startX = 0;
+                let currentTranslate = 0;
+                
+                toast.addEventListener('touchstart', (e) => {
+                    startX = e.touches[0].clientX;
+                    toast.style.transition = 'none';
+                }, {passive: true});
+                
+                toast.addEventListener('touchmove', (e) => {
+                    const diffX = e.touches[0].clientX - startX;
+                    if (Math.abs(diffX) > 10) {
+                        currentTranslate = diffX;
+                        toast.style.transform = `translateX(${diffX}px)`;
+                        toast.style.opacity = Math.max(0, 1 - Math.abs(diffX) / 100);
+                    }
+                }, {passive: true});
+                
+                toast.addEventListener('touchend', () => {
+                    toast.style.transition = 'all 0.3s ease';
+                    if (Math.abs(currentTranslate) > 50) {
+                        toast.style.transform = `translateX(${currentTranslate > 0 ? 100 : -100}%)`;
+                        toast.style.opacity = '0';
+                        setTimeout(() => toast.remove(), 300);
+                    } else {
+                        toast.style.transform = 'translateX(0)';
+                        toast.style.opacity = '1';
+                    }
+                });
+
                 container.appendChild(toast);
                 setTimeout(() => {
-                    toast.style.opacity = '0'; toast.style.transform = 'translateY(-10px) scale(0.95)';
-                    toast.style.transition = 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
-                    setTimeout(() => toast.remove(), 300);
+                    if (toast.parentElement) {
+                        toast.style.transition = 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+                        toast.style.opacity = '0'; 
+                        toast.style.transform = 'translateY(-10px) scale(0.95)';
+                        setTimeout(() => toast.remove(), 300);
+                    }
                 }, 4500);
             }
         }
@@ -298,7 +332,7 @@
             save(convId, value) { localStorage.setItem(`falconix_wp_${convId}`, value); this.apply(convId); },
             apply(convId) {
                 const bg = localStorage.getItem(`falconix_wp_${convId}`); const chatArea = document.getElementById('chat-active'); if (!chatArea) return;
-                chatArea.style.backgroundImage = 'none'; chatArea.style.backgroundColor = 'transparent';
+                chatArea.style.backgroundImage = 'none'; chatArea.style.backgroundColor = '#0f172a';
                 if (bg) {
                     if (bg.startsWith('data:image')) { chatArea.style.backgroundImage = `url(${bg})`; chatArea.style.backgroundSize = 'cover'; chatArea.style.backgroundPosition = 'center'; } 
                     else if (bg.startsWith('linear-gradient') || bg.startsWith('radial-gradient')) chatArea.style.backgroundImage = bg;
@@ -429,6 +463,10 @@
                             settingsAvatarPreview.innerHTML = `<svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>`;
                             if (btnRemoveAvatar) btnRemoveAvatar.classList.add('hidden');
                         }
+                        if (AppState.selectedUser) {
+                            UI.updateChatHeader(AppState.selectedUser);
+                            UI.updateInputState(AppState.selectedUser);
+                        }
                     }
                 });
             },
@@ -484,6 +522,8 @@
             },
             async sendMessage(plaintext, recipientUser) {
                 if (!plaintext.trim() || !recipientUser) return;
+                if (AppState.currentUserData?.blocked?.includes(recipientUser.uid)) return ToastManager.show("Unblock this contact to send messages.", "error");
+                if (recipientUser.blocked?.includes(AppState.currentUser.uid)) return ToastManager.show("You have been blocked by this contact.", "error");
                 try {
                     let payloadText = plaintext;
                     if (AppState.replyToMsg) payloadText = JSON.stringify({ _ft: 'reply', text: plaintext, ref: AppState.replyToMsg });
@@ -533,6 +573,8 @@
             },
             async sendFile(file, recipientUser, fileType = 'file') {
                 if (!file || !recipientUser) return;
+                if (AppState.currentUserData?.blocked?.includes(recipientUser.uid)) return ToastManager.show("Unblock this contact to send messages.", "error");
+                if (recipientUser.blocked?.includes(AppState.currentUser.uid)) return ToastManager.show("You have been blocked by this contact.", "error");
                 ToastManager.show(`Encrypting ${fileType}...`, 'success');
                 try {
                     const fileBuffer = await file.arrayBuffer(); const aesKey = await AES.generateKey();
@@ -565,48 +607,48 @@
             async handleMessagesSnapshot(messages) {
                 const list = document.getElementById('chat-message-list');
                 if (!AppState.localKeys) return;
-                
+
                 const privateKey = await RSA.importPrivateKey(AppState.localKeys.privateKeyB64);
-                
-                list.innerHTML = `
-                    <div class="flex justify-center mb-6 mt-2 w-full animate-slide-up">
-                        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5 flex items-center shadow-sm max-w-sm text-center backdrop-blur-sm">
+
+                let securityBanner = document.getElementById('security-banner-msg');
+                if (!securityBanner) {
+                    securityBanner = document.createElement('div');
+                    securityBanner.id = 'security-banner-msg';
+                    securityBanner.className = 'flex justify-center mb-6 mt-2 w-full animate-slide-up shrink-0';
+                    securityBanner.innerHTML = `
+                        <div class="bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 flex items-center shadow-sm max-w-sm text-center">
                             <svg class="w-4 h-4 text-emerald-400 mr-2.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                             <p class="text-[10px] sm:text-xs text-emerald-400/90 font-medium leading-relaxed">Messages to this contact are secured with AES-256-GCM encryption.</p>
                         </div>
-                    </div>
-                `; 
-                
+                    `;
+                    list.appendChild(securityBanner);
+                }
+
+                const spinner = document.getElementById('loading-spinner');
+                if (spinner) spinner.remove();
+
                 if (messages.length === 0) { UI.updatePinnedBanner(null); return; }
 
                 const convId = AppState.selectedUser ? Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid) : null;
                 const now = Date.now();
                 let pinnedMsgFound = false;
-                let lastDateString = null;
+
+                const processedIds = new Set();
 
                 for (const msg of messages) {
                     if (msg.expiresAt && msg.expiresAt < now) { DataService.deleteMessage(db, convId, msg.id); continue; }
-
-                    const msgDate = msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date();
-                    const today = new Date();
-                    const yesterday = new Date(today);
-                    yesterday.setDate(yesterday.getDate() - 1);
-                    
-                    let dateString = msgDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                    if (msgDate.toDateString() === today.toDateString()) dateString = "Today";
-                    else if (msgDate.toDateString() === yesterday.toDateString()) dateString = "Yesterday";
-
-                    if (dateString !== lastDateString) {
-                        const separator = document.createElement('div');
-                        separator.className = 'flex justify-center my-4 animate-slide-up w-full';
-                        separator.innerHTML = `<span class="px-3 py-1 bg-black/40 border border-white/5 rounded-lg text-[10px] sm:text-xs text-gray-400 font-medium tracking-wide uppercase shadow-sm backdrop-blur-sm">${dateString}</span>`;
-                        list.appendChild(separator);
-                        lastDateString = dateString;
-                    }
+                    processedIds.add(msg.id);
 
                     try {
                         const targetEncryptedAesKey = msg.senderUid === AppState.currentUser.uid ? msg.senderEncryptedAesKey : msg.encryptedAesKey;
                         let decryptedText = ""; let fileData = null;
+
+                        const existingWrapper = document.getElementById(`msg-bubble-${msg.id}`);
+                        if (existingWrapper && existingWrapper.getAttribute('data-raw-status') === (msg.status || 'sent') && existingWrapper.getAttribute('data-raw-reactions') === JSON.stringify(msg.reactions||{}) && existingWrapper.getAttribute('data-raw-edited') === String(!!msg.isEdited)) {
+                            if (msg.id === AppState.pinnedMsgId) { pinnedMsgFound = true; UI.updatePinnedBanner(existingWrapper.getAttribute('data-decrypted-text') || ''); }
+                            if (msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') DataService.markMessageRead(db, convId, msg.id);
+                            continue;
+                        }
 
                         if (targetEncryptedAesKey) {
                             const rawAesKey = await RSA.decryptData(privateKey, targetEncryptedAesKey);
@@ -618,18 +660,56 @@
                         if (msg.id === AppState.pinnedMsgId) { UI.updatePinnedBanner(decryptedText); pinnedMsgFound = true; }
 
                         UI.appendMessage({
-                            id: msg.id, text: decryptedText, timestamp: msgDate,
+                            id: msg.id, text: decryptedText, timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(),
                             isSelf: msg.senderUid === AppState.currentUser.uid, status: msg.status || 'sent', fileData: fileData,
                             isEdited: msg.isEdited, reactions: msg.reactions || {}, expiresAt: msg.expiresAt || null,
                             rawCrypto: { ciphertext: msg.ciphertext, iv: msg.iv, encryptedAesKey: targetEncryptedAesKey }
                         });
 
+                        const newlyAppended = document.getElementById(`msg-bubble-${msg.id}`);
+                        if(newlyAppended) {
+                            newlyAppended.setAttribute('data-raw-status', msg.status || 'sent');
+                            newlyAppended.setAttribute('data-raw-reactions', JSON.stringify(msg.reactions||{}));
+                            newlyAppended.setAttribute('data-raw-edited', String(!!msg.isEdited));
+                            newlyAppended.setAttribute('data-decrypted-text', decryptedText);
+                        }
+
                         if (msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') DataService.markMessageRead(db, convId, msg.id);
                     } catch (err) {
-                        UI.appendMessage({ id: msg.id, text: "[Decryption Failed]", timestamp: msgDate, isSelf: msg.senderUid === AppState.currentUser.uid, status: 'error' });
+                        UI.appendMessage({ id: msg.id, text: "[Decryption Failed]", timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(), isSelf: msg.senderUid === AppState.currentUser.uid, status: 'error' });
                     }
                 }
+
                 if(!pinnedMsgFound) UI.updatePinnedBanner(null);
+
+                const allBubbles = list.querySelectorAll('.msg-bubble-wrapper');
+                allBubbles.forEach(bubble => {
+                    const id = bubble.id.replace('msg-bubble-', '');
+                    if (!processedIds.has(id)) bubble.remove();
+                });
+
+                list.querySelectorAll('.date-separator').forEach(el => el.remove());
+                const currentBubbles = Array.from(list.querySelectorAll('.msg-bubble-wrapper'));
+                let currentLastDate = null;
+                currentBubbles.forEach(bubble => {
+                    const timestamp = parseInt(bubble.getAttribute('data-timestamp') || '0');
+                    if (timestamp) {
+                        const msgDate = new Date(timestamp);
+                        const today = new Date();
+                        const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+                        let dateString = msgDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                        if (msgDate.toDateString() === today.toDateString()) dateString = "Today";
+                        else if (msgDate.toDateString() === yesterday.toDateString()) dateString = "Yesterday";
+
+                        if (dateString !== currentLastDate) {
+                            const separator = document.createElement('div');
+                            separator.className = 'date-separator flex justify-center my-4 animate-slide-up w-full shrink-0';
+                            separator.innerHTML = `<span class="px-3 py-1 bg-gray-800 border border-gray-700 rounded-lg text-[10px] sm:text-xs text-gray-400 font-medium tracking-wide uppercase shadow-sm">${dateString}</span>`;
+                            list.insertBefore(separator, bubble);
+                            currentLastDate = dateString;
+                        }
+                    }
+                });
             }
         };
 
@@ -638,6 +718,9 @@
 
             async initCall(isVideo) {
                 if(!AppState.selectedUser) return;
+                if (AppState.currentUserData?.blocked?.includes(AppState.selectedUser.uid) || AppState.selectedUser.blocked?.includes(AppState.currentUser.uid)) {
+                    return ToastManager.show("Calls are disabled for this contact.", "error");
+                }
                 this.convId = Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid);
                 this.isCaller = true;
                 
@@ -774,6 +857,29 @@
                 AppState.selectedUser = null; this.clearInputBanners(); Router.navigate('app');
             },
 
+            updateInputState(user) {
+                const iAmBlocked = user.blocked?.includes(AppState.currentUser.uid);
+                const iBlockedThem = AppState.currentUserData?.blocked?.includes(user.uid);
+                const chatInput = document.getElementById('chat-input');
+                const btnSend = document.getElementById('btn-send-message');
+                const btnMic = document.getElementById('btn-record-audio');
+                const btnAttach = document.getElementById('btn-attach-file');
+                
+                if (iAmBlocked) {
+                    chatInput.disabled = true;
+                    chatInput.placeholder = "You have been blocked.";
+                    btnSend.disabled = true; btnMic.disabled = true; btnAttach.disabled = true;
+                } else if (iBlockedThem) {
+                    chatInput.disabled = true;
+                    chatInput.placeholder = "Unblock to send messages.";
+                    btnSend.disabled = true; btnMic.disabled = true; btnAttach.disabled = true;
+                } else {
+                    chatInput.disabled = false;
+                    chatInput.placeholder = "Type a message...";
+                    btnSend.disabled = false; btnMic.disabled = false; btnAttach.disabled = false;
+                }
+            },
+
             renderUserList(users) {
                 const listContainer = document.getElementById('sidebar-user-list');
                 if (!listContainer) return; listContainer.innerHTML = '';
@@ -799,24 +905,29 @@
                         ? `<div class="bg-falconix-primary text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-lg ml-2 relative"><span class="absolute inline-flex h-full w-full rounded-full bg-falconix-primary opacity-75 animate-ping-badge inset-0"></span><span class="relative z-10">${unreadCount}</span></div>` 
                         : '';
 
+                    const iAmBlocked = user.blocked?.includes(AppState.currentUser.uid);
+                    const iBlockedThem = AppState.currentUserData?.blocked?.includes(user.uid);
+                    const isOnline = iAmBlocked || iBlockedThem ? false : user.isOnline;
+                    const grayClass = iAmBlocked ? 'grayscale opacity-50' : '';
+
                     const el = document.createElement('div');
-                    el.className = `p-4 border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors flex items-center space-x-3 group ${user.isVault ? 'bg-falconix-primary/10' : ''}`;
+                    el.className = `p-4 border-b border-white/5 hover:bg-gray-800 cursor-pointer transition-colors flex items-center space-x-3 group ${user.isVault ? 'bg-falconix-primary/10' : ''}`;
                     el.innerHTML = `
                         <div class="relative shrink-0">
-                            <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-falconix-primary to-falconix-secondary flex items-center justify-center text-white font-bold shadow-lg overflow-hidden">
+                            <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-falconix-primary to-falconix-secondary flex items-center justify-center text-white font-bold shadow-lg overflow-hidden ${grayClass}">
                                 ${user.isVault ? '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>' : (user.photoURL ? `<img src="${user.photoURL}" alt="${user.username}" class="w-full h-full object-cover">` : user.username.charAt(0).toUpperCase())}
                             </div>
-                            ${user.isOnline ? '<div class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-falconix-dark rounded-full"></div>' : ''}
+                            ${isOnline ? '<div class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-falconix-dark rounded-full"></div>' : ''}
                         </div>
                         <div class="flex-1 min-w-0 flex flex-col justify-center">
                             <div class="flex justify-between items-center">
-                                <h4 class="text-white text-sm font-semibold truncate group-hover:text-falconix-primary transition-colors pr-2">${this.escapeHTML(user.username)}</h4>
+                                <h4 class="text-white text-sm font-semibold truncate group-hover:text-falconix-primary transition-colors pr-2 ${grayClass}">${this.escapeHTML(user.username)}</h4>
                                 <div class="flex items-center shrink-0">
-                                    <span class="text-[10px] ${user.isOnline ? 'text-emerald-400' : 'text-gray-500'} font-mono">${user.isOnline ? 'Online' : 'Offline'}</span>
+                                    <span class="text-[10px] ${isOnline ? 'text-emerald-400' : 'text-gray-500'} font-mono">${isOnline ? 'Online' : 'Offline'}</span>
                                     ${unreadBadgeHtml}
                                 </div>
                             </div>
-                            <p class="text-gray-400 text-[11px] truncate mt-0.5">${user.bio ? this.escapeHTML(user.bio) : 'Available'}</p>
+                            <p class="text-gray-400 text-[11px] truncate mt-0.5">${(iAmBlocked || iBlockedThem) ? '' : (user.bio ? this.escapeHTML(user.bio) : 'Available')}</p>
                         </div>
                     `;
                     el.addEventListener('click', async () => {
@@ -828,6 +939,10 @@
             },
             
             updateChatHeader(user, isTyping = false) {
+                const iAmBlocked = user.blocked?.includes(AppState.currentUser.uid);
+                const iBlockedThem = AppState.currentUserData?.blocked?.includes(user.uid);
+                const isOnline = iAmBlocked || iBlockedThem ? false : user.isOnline;
+
                 document.getElementById('chat-header-name').textContent = user.username;
                 const avatarContainer = document.getElementById('chat-header-avatar');
                 
@@ -835,15 +950,20 @@
                 else if (user.photoURL) avatarContainer.innerHTML = `<img src="${user.photoURL}" alt="${user.username}" class="w-full h-full object-cover">`;
                 else avatarContainer.innerHTML = `<span class="text-white font-bold">${user.username.charAt(0).toUpperCase()}</span>`;
 
+                if (iAmBlocked) avatarContainer.classList.add('grayscale', 'opacity-50');
+                else avatarContainer.classList.remove('grayscale', 'opacity-50');
+
                 const statusContainer = document.getElementById('chat-header-status');
-                if (isTyping) {
+                if (isTyping && !iAmBlocked && !iBlockedThem) {
                     statusContainer.innerHTML = `<span class="flex items-center space-x-1"><span class="w-1.5 h-1.5 bg-falconix-primary rounded-full animate-bounce"></span><span class="w-1.5 h-1.5 bg-falconix-primary rounded-full animate-bounce" style="animation-delay: 0.1s"></span><span class="w-1.5 h-1.5 bg-falconix-primary rounded-full animate-bounce" style="animation-delay: 0.2s"></span></span><span class="text-[11px] text-falconix-primary font-medium uppercase tracking-wider ml-2">Typing...</span>`;
                 } else {
-                    statusContainer.innerHTML = `<span class="w-2 h-2 rounded-full ${user.isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-gray-500'}"></span><span class="text-[11px] ${user.isOnline ? 'text-emerald-400' : 'text-gray-400'} font-medium uppercase tracking-wider">${user.isOnline ? 'Online' : 'Offline'}</span>${user.bio ? `<span class="mx-1.5 text-gray-600">•</span><span class="text-[11px] text-gray-400 truncate max-w-[100px] sm:max-w-[200px]">${this.escapeHTML(user.bio)}</span>` : ''}`;
+                    const bioStr = (iAmBlocked || iBlockedThem) ? '' : (user.bio ? `<span class="mx-1.5 text-gray-600">•</span><span class="text-[11px] text-gray-400 truncate max-w-[100px] sm:max-w-[200px]">${this.escapeHTML(user.bio)}</span>` : '');
+                    statusContainer.innerHTML = `<span class="w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-gray-500'}"></span><span class="text-[11px] ${isOnline ? 'text-emerald-400' : 'text-gray-400'} font-medium uppercase tracking-wider">${isOnline ? 'Online' : 'Offline'}</span>${bioStr}`;
                 }
 
                 const callBtns = document.getElementById('chat-header-calls');
-                if(user.isVault) callBtns.classList.add('hidden'); else callBtns.classList.remove('hidden');
+                if(user.isVault || iAmBlocked || iBlockedThem) callBtns.classList.add('hidden'); 
+                else callBtns.classList.remove('hidden');
             },
 
             updateDisappearingBanner() {
@@ -868,12 +988,12 @@
                 document.getElementById('chat-active').classList.remove('hidden');
                 document.getElementById('chat-active').classList.add('flex');
                 
-                this.openMobileChat(); this.updateChatHeader(user);
+                this.openMobileChat(); this.updateChatHeader(user); this.updateInputState(user);
                 
                 const convId = Helpers.getConversationId(AppState.currentUser.uid, user.uid);
                 WallpaperService.apply(convId);
                 
-                document.getElementById('chat-message-list').innerHTML = `<div class="flex items-center justify-center h-full"><div class="animate-pulse flex flex-col items-center"><div class="w-8 h-8 border-4 border-falconix-primary border-t-transparent rounded-full animate-spin mb-4"></div><p class="text-sm text-gray-400">Decrypting secure channel...</p></div></div>`;
+                document.getElementById('chat-message-list').innerHTML = `<div id="loading-spinner" class="flex items-center justify-center h-full"><div class="animate-pulse flex flex-col items-center"><div class="w-8 h-8 border-4 border-falconix-primary border-t-transparent rounded-full animate-spin mb-4"></div><p class="text-sm text-gray-400">Decrypting secure channel...</p></div></div>`;
 
                 DataService.startConversationListener(db, convId, (data) => {
                     const isRecentlyTyping = data && data.typing && data.typing[user.uid] && (Date.now() - data.typing[user.uid]) < 3000;
@@ -881,6 +1001,9 @@
                     if (data && data.disappearing !== undefined) AppState.disappearingTimerMs = data.disappearing; else AppState.disappearingTimerMs = 0;
                     this.updateDisappearingBanner();
                     if(data && data.pinnedMsgId) AppState.pinnedMsgId = data.pinnedMsgId; else { AppState.pinnedMsgId = null; this.updatePinnedBanner(null); }
+                    if (data && data[`unread_${AppState.currentUser.uid}`] > 0) {
+                        updateDoc(doc(db, FIREBASE_PATHS.CONVERSATIONS, convId), { [`unread_${AppState.currentUser.uid}`]: 0 }).catch(()=>{});
+                    }
                 });
 
                 DataService.startMessageListener(db, convId, (messages) => ChatService.handleMessagesSnapshot(messages));
@@ -906,7 +1029,7 @@
                     const el = document.getElementById(elementId);
                     if (el && title !== url) {
                         el.innerHTML = `
-                            <a href="${url}" target="_blank" class="block mt-2 bg-black/30 border border-white/10 rounded-xl overflow-hidden hover:bg-black/40 transition-colors">
+                            <a href="${url}" target="_blank" class="block mt-2 bg-gray-800 border border-gray-700 rounded-xl overflow-hidden hover:bg-gray-700 transition-colors">
                                 ${img ? `<div class="h-32 w-full overflow-hidden"><img src="${img}" alt="Link Preview Image" class="w-full h-full object-cover"></div>` : ''}
                                 <div class="p-3">
                                     <h4 class="text-sm font-bold text-gray-100 truncate">${this.escapeHTML(title)}</h4>
@@ -922,18 +1045,57 @@
 
             appendMessage(msg) {
                 const list = document.getElementById('chat-message-list');
-                const wrapper = document.createElement('div');
-                wrapper.id = `msg-bubble-${msg.id}`; 
+                let wrapper = document.getElementById(`msg-bubble-${msg.id}`);
+                const isNew = !wrapper;
+
+                const stateStr = msg.status + '_' + JSON.stringify(msg.reactions || {}) + '_' + msg.isEdited + '_' + msg.text;
+
+                if (isNew) {
+                    wrapper = document.createElement('div');
+                    wrapper.id = `msg-bubble-${msg.id}`;
+                    wrapper.className = msg.isSelf
+                        ? 'msg-bubble-wrapper flex justify-end animate-slide-up group cursor-context-menu relative mb-2 w-full transition-transform duration-300 shrink-0'
+                        : 'msg-bubble-wrapper flex justify-start animate-slide-up group cursor-context-menu relative mb-2 w-full transition-transform duration-300 shrink-0';
+                    if (msg.timestamp) wrapper.setAttribute('data-timestamp', msg.timestamp.getTime());
+                } else {
+                    if (wrapper.getAttribute('data-state') === stateStr) return;
+                }
+
+                let reactionsHtml = '';
+                const reactionEntries = Object.entries(msg.reactions || {});
+                if (reactionEntries.length > 0) {
+                    const counts = {}; reactionEntries.forEach(([_, emoji]) => { counts[emoji] = (counts[emoji] || 0) + 1; });
+                    const badges = Object.entries(counts).map(([emoji, count]) => `<span class="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-900 border border-gray-700 text-[10px] shadow-sm transform -translate-y-2">${emoji} ${count > 1 ? count : ''}</span>`).join(' ');
+                    reactionsHtml = `<div class="reactions-container absolute -bottom-2 right-2 flex space-x-1 z-10">${badges}</div>`;
+                }
+
+                if (!isNew) {
+                    wrapper.setAttribute('data-state', stateStr);
+                    const receipt = wrapper.querySelector('.receipt-container');
+                    if (receipt && msg.isSelf) receipt.innerHTML = msg.status === 'read' ? `<svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7M5 18l4 4 10-10"></path></svg>` : `<svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+
+                    let reactionsContainer = wrapper.querySelector('.reactions-container');
+                    if (reactionsHtml) {
+                        if (reactionsContainer) { reactionsContainer.outerHTML = reactionsHtml; }
+                        else { const bubble = wrapper.querySelector('.bubble-inner'); if(bubble) bubble.insertAdjacentHTML('beforeend', reactionsHtml); }
+                    } else if (reactionsContainer) { reactionsContainer.remove(); }
+
+                    const oldText = wrapper.getAttribute('data-text');
+                    if (oldText === msg.text) return;
+                }
+
+                wrapper.setAttribute('data-text', msg.text);
+                wrapper.setAttribute('data-state', stateStr);
+                if (msg.expiresAt) wrapper.setAttribute('data-expires-at', msg.expiresAt);
+
                 const timeStr = msg.timestamp?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) || 'Now';
                 const convId = AppState.selectedUser ? Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid) : null;
-                
-                if (msg.expiresAt) wrapper.setAttribute('data-expires-at', msg.expiresAt);
 
                 let displayText = msg.text; let replyContextHtml = '';
                 if(displayText.startsWith('{"_ft":"reply"')) {
                     try {
                         const parsed = JSON.parse(displayText); displayText = parsed.text;
-                        replyContextHtml = `<div onclick="window.UI.scrollToMessage('${parsed.ref.id}')" class="mb-1.5 px-3 py-1.5 bg-black/20 border-l-2 border-falconix-primary rounded text-xs text-gray-300 opacity-80 truncate max-w-full cursor-pointer hover:bg-black/40 transition-colors shadow-inner">${this.escapeHTML(parsed.ref.text)}</div>`;
+                        replyContextHtml = `<div onclick="window.UI.scrollToMessage('${parsed.ref.id}')" class="mb-1.5 px-3 py-1.5 bg-gray-900 border-l-2 border-falconix-primary rounded text-xs text-gray-300 truncate max-w-full cursor-pointer hover:bg-black transition-colors shadow-inner">${this.escapeHTML(parsed.ref.text)}</div>`;
                     } catch(e) {}
                 }
 
@@ -944,20 +1106,10 @@
                 const timerIcon = msg.expiresAt ? `<svg class="w-3 h-3 text-emerald-400 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>` : '';
                 let receiptHtml = '';
                 if (msg.isSelf) {
-                    if (msg.status === 'read') receiptHtml = `<svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7M5 18l4 4 10-10"></path></svg>`;
-                    else receiptHtml = `<svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
-                }
-
-                let reactionsHtml = '';
-                const reactionEntries = Object.entries(msg.reactions || {});
-                if (reactionEntries.length > 0) {
-                    const counts = {}; reactionEntries.forEach(([_, emoji]) => { counts[emoji] = (counts[emoji] || 0) + 1; });
-                    const badges = Object.entries(counts).map(([emoji, count]) => `<span class="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-800/90 border border-white/10 text-[10px] shadow-sm transform -translate-y-2">${emoji} ${count > 1 ? count : ''}</span>`).join(' ');
-                    reactionsHtml = `<div class="absolute -bottom-2 right-2 flex space-x-1 z-10">${badges}</div>`;
+                    receiptHtml = `<span class="receipt-container">${msg.status === 'read' ? '<svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7M5 18l4 4 10-10"></path></svg>' : '<svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'}</span>`;
                 }
 
                 let contentHtml = `${replyContextHtml}<p class="text-sm sm:text-base leading-relaxed break-words">${textFormatted}</p>`;
-                
                 if(hasLink) {
                     const previewId = `link-preview-${msg.id}`; contentHtml += `<div id="${previewId}" class="hidden"></div>`;
                     const urls = displayText.match(urlRegex); if(urls && urls.length > 0) this.fetchLinkPreview(urls[0], previewId);
@@ -968,7 +1120,7 @@
                     contentHtml = `
                         <div class="flex flex-col space-y-2 relative">
                             ${replyContextHtml}
-                            <div class="flex items-center space-x-3 bg-black/20 p-2 rounded-xl">
+                            <div class="flex items-center space-x-3 bg-gray-900 p-2 rounded-xl">
                                 <div class="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center text-falconix-primary">
                                     ${isAudio ? '<svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>' : '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'}
                                 </div>
@@ -982,11 +1134,10 @@
                         </div>
                     `;
                 }
-                
+
                 const editedHtml = msg.isEdited ? `<span class="text-[9px] text-gray-500 italic ml-1">(edited)</span>` : '';
 
                 if (msg.isSelf) {
-                    wrapper.className = 'flex justify-end animate-slide-up group cursor-context-menu relative mb-2 w-full transition-transform duration-300';
                     wrapper.innerHTML = `
                         <div class="max-w-[85%] sm:max-w-[75%] relative touch-action-pan-y bubble-inner transform transition-transform duration-200">
                             <div class="bg-gradient-to-tr from-falconix-primary to-falconix-secondary text-white rounded-2xl rounded-tr-sm px-4 py-2.5 shadow-md shadow-falconix-primary/10">
@@ -1002,14 +1153,14 @@
                         </div>
                     `;
                 } else {
-                    wrapper.className = 'flex justify-start animate-slide-up group cursor-context-menu relative mb-2 w-full transition-transform duration-300';
+                    const bubbleAvatarGray = AppState.selectedUser?.blocked?.includes(AppState.currentUser.uid) ? 'grayscale opacity-50' : '';
                     wrapper.innerHTML = `
                         <div class="max-w-[85%] sm:max-w-[75%] flex space-x-2 touch-action-pan-y bubble-inner transform transition-transform duration-200">
-                            <div class="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 flex items-center justify-center border border-gray-700 text-xs font-bold text-white mt-1 shadow-md overflow-hidden">
+                            <div class="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 flex items-center justify-center border border-gray-700 text-xs font-bold text-white mt-1 shadow-md overflow-hidden ${bubbleAvatarGray}">
                                 ${AppState.selectedUser.isVault ? '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>' : (AppState.selectedUser.photoURL ? `<img src="${AppState.selectedUser.photoURL}" alt="${AppState.selectedUser.username}" class="w-full h-full object-cover">` : AppState.selectedUser.username.charAt(0).toUpperCase())}
                             </div>
                             <div class="relative w-full">
-                                <div class="bg-gray-800/80 border border-white/5 text-gray-100 rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-md backdrop-blur-sm">
+                                <div class="bg-gray-800 border border-gray-700 text-gray-100 rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-md">
                                     ${contentHtml}
                                 </div>
                                 ${reactionsHtml}
@@ -1022,50 +1173,55 @@
                         </div>
                     `;
                 }
-                
+
                 const innerBubble = wrapper.querySelector('.bubble-inner');
-                let touchTimer; let startX = 0, startY = 0; let isSwiping = false; let deltaX = 0;
+                if (isNew) {
+                    let touchTimer; let startX = 0, startY = 0; let isSwiping = false; let deltaX = 0;
 
-                wrapper.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    this.showContextMenu(e.clientX, e.clientY, { ...msg, text: displayText }, convId); 
-                });
+                    wrapper.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        this.showContextMenu(e.clientX, e.clientY, { ...msg, text: displayText }, convId);
+                    });
 
-                wrapper.addEventListener('touchstart', (e) => {
-                    startX = e.touches[0].clientX; startY = e.touches[0].clientY; isSwiping = false; deltaX = 0;
-                    touchTimer = setTimeout(() => { 
-                        if (!isSwiping) { if(navigator.vibrate) navigator.vibrate(50); this.showContextMenu(startX, startY, { ...msg, text: displayText }, convId); }
-                    }, 500); 
-                }, { passive: true });
+                    wrapper.addEventListener('touchstart', (e) => {
+                        startX = e.touches[0].clientX; startY = e.touches[0].clientY; isSwiping = false; deltaX = 0;
+                        touchTimer = setTimeout(() => {
+                            if (!isSwiping) { if(navigator.vibrate) navigator.vibrate(50); this.showContextMenu(startX, startY, { ...msg, text: displayText }, convId); }
+                        }, 500);
+                    }, { passive: true });
 
-                wrapper.addEventListener('touchmove', (e) => {
-                    deltaX = e.touches[0].clientX - startX; const deltaY = e.touches[0].clientY - startY;
-                    if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) clearTimeout(touchTimer); 
-                    if (Math.abs(deltaX) > 15 && Math.abs(deltaX) > Math.abs(deltaY)) {
-                        isSwiping = true; if(e.cancelable) e.preventDefault(); 
-                        let moveX = deltaX;
-                        if (moveX > 60) moveX = 60 + (moveX - 60) * 0.15;
-                        if (moveX < -60) moveX = -60 + (moveX + 60) * 0.15;
-                        innerBubble.style.transform = `translateX(${moveX}px)`; innerBubble.style.transition = 'none';
-                    }
-                }, { passive: false }); 
-
-                const resetSwipe = () => {
-                    clearTimeout(touchTimer);
-                    if (isSwiping) {
-                        innerBubble.style.transform = 'translateX(0px)'; innerBubble.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
-                        if (Math.abs(deltaX) > 60) {
-                            if(navigator.vibrate) navigator.vibrate(30); 
-                            AppState.replyToMsg = { id: msg.id, text: displayText };
-                            UI.showInputBanner('Replying to', AppState.replyToMsg.text, 'border-falconix-secondary');
+                    wrapper.addEventListener('touchmove', (e) => {
+                        deltaX = e.touches[0].clientX - startX; const deltaY = e.touches[0].clientY - startY;
+                        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) clearTimeout(touchTimer);
+                        if (Math.abs(deltaX) > 15 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                            isSwiping = true; if(e.cancelable) e.preventDefault();
+                            let moveX = deltaX;
+                            if (moveX > 60) moveX = 60 + (moveX - 60) * 0.15;
+                            if (moveX < -60) moveX = -60 + (moveX + 60) * 0.15;
+                            innerBubble.style.transform = `translateX(${moveX}px)`; innerBubble.style.transition = 'none';
                         }
-                    }
-                };
+                    }, { passive: false });
 
-                wrapper.addEventListener('touchend', resetSwipe); wrapper.addEventListener('touchcancel', resetSwipe);
-                
-                list.appendChild(wrapper);
-                list.scrollTop = list.scrollHeight; 
+                    const resetSwipe = () => {
+                        clearTimeout(touchTimer);
+                        if (isSwiping) {
+                            innerBubble.style.transform = 'translateX(0px)'; innerBubble.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+                            if (Math.abs(deltaX) > 60) {
+                                if(navigator.vibrate) navigator.vibrate(30);
+                                AppState.replyToMsg = { id: msg.id, text: displayText };
+                                UI.showInputBanner('Replying to', AppState.replyToMsg.text, 'border-falconix-secondary');
+                            }
+                        }
+                    };
+
+                    wrapper.addEventListener('touchend', resetSwipe); wrapper.addEventListener('touchcancel', resetSwipe);
+                    list.appendChild(wrapper);
+
+                    const isNearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 150;
+                    if (msg.isSelf || isNearBottom) {
+                        setTimeout(() => list.scrollTop = list.scrollHeight, 50);
+                    }
+                }
 
                 if (msg.fileData) {
                     const decryptBtn = wrapper.querySelector(`#btn-decrypt-${msg.id}`);
@@ -1077,17 +1233,17 @@
                             const blob = new Blob([decryptedBuffer], { type: msg.fileData.mimeType });
                             const url = URL.createObjectURL(blob);
                             const mediaContainer = wrapper.querySelector(`#file-render-${msg.id}`);
-                            
+
                             if (msg.fileData.mimeType.startsWith('image/')) {
-                                mediaContainer.innerHTML = `<img src="${url}" alt="Decrypted Image" class="w-full h-auto object-cover rounded-xl border border-white/10 mt-2 cursor-pointer transition-transform hover:scale-[1.02]" onclick="window.UI.showLightbox('${url}')">`;
-                                mediaContainer.classList.remove('hidden'); list.scrollTop = list.scrollHeight; decryptBtn.style.display = 'none'; 
+                                mediaContainer.innerHTML = `<img src="${url}" alt="Decrypted Image" class="w-full h-auto object-cover rounded-xl border border-gray-700 mt-2 cursor-pointer transition-transform hover:scale-[1.02]" onclick="window.UI.showLightbox('${url}')">`;
+                                mediaContainer.classList.remove('hidden'); list.scrollTop = list.scrollHeight; decryptBtn.style.display = 'none';
                             } else if (msg.fileData.mimeType.startsWith('audio/')) {
                                 mediaContainer.innerHTML = `<audio controls src="${url}" class="w-full mt-2" autoplay></audio>`;
                                 mediaContainer.classList.remove('hidden'); decryptBtn.style.display = 'none';
                             } else {
                                 const a = document.createElement('a'); a.href = url; a.download = msg.fileData.fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a);
                             }
-                        } catch (err) { ToastManager.show("Failed to decrypt media.", "error"); } 
+                        } catch (err) { ToastManager.show("Failed to decrypt media.", "error"); }
                         finally { decryptBtn.classList.remove('animate-spin'); }
                     });
                 }
@@ -1120,7 +1276,7 @@
 
             showInputBanner(title, text, colorClass) {
                 const banner = document.getElementById('input-action-banner');
-                banner.innerHTML = `<div class="flex items-center justify-between bg-black/40 border-l-4 ${colorClass} px-3 py-2 rounded-t-xl text-sm backdrop-blur-sm"><div class="flex flex-col overflow-hidden"><span class="${colorClass.replace('border-', 'text-')} font-semibold text-xs uppercase tracking-wider">${title}</span><span class="text-gray-300 truncate text-xs">${this.escapeHTML(text)}</span></div><button onclick="window.UI.clearInputBanners()" class="p-1 hover:bg-white/10 rounded text-gray-400"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div>`;
+                banner.innerHTML = `<div class="flex items-center justify-between bg-gray-900 border-l-4 ${colorClass} px-3 py-2 rounded-t-xl text-sm"><div class="flex flex-col overflow-hidden"><span class="${colorClass.replace('border-', 'text-')} font-semibold text-xs uppercase tracking-wider">${title}</span><span class="text-gray-300 truncate text-xs">${this.escapeHTML(text)}</span></div><button onclick="window.UI.clearInputBanners()" class="p-1 hover:bg-gray-800 rounded text-gray-400"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div>`;
                 banner.classList.remove('hidden'); document.getElementById('chat-input').focus();
             },
 
@@ -1131,7 +1287,7 @@
                 
                 AppState.users.forEach(user => {
                     const el = document.createElement('div');
-                    el.className = `p-3 border-b border-white/5 hover:bg-white/10 cursor-pointer flex items-center space-x-3 transition-colors ${user.isVault ? 'bg-falconix-primary/10' : ''}`;
+                    el.className = `p-3 border-b border-white/5 hover:bg-gray-800 cursor-pointer flex items-center space-x-3 transition-colors ${user.isVault ? 'bg-falconix-primary/10' : ''}`;
                     el.innerHTML = `
                         <div class="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-white overflow-hidden shrink-0 font-bold text-xs shadow-md">
                             ${user.isVault ? '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>' : (user.photoURL ? `<img src="${user.photoURL}" alt="${user.username}" class="w-full h-full object-cover">` : user.username.charAt(0).toUpperCase())}
@@ -1213,6 +1369,11 @@
                 document.getElementById('safety-number-display').textContent = "Generating...";
                 const safetyNumber = await Helpers.generateSafetyNumber(AppState.localKeys.publicKeyB64, AppState.selectedUser.publicKey);
                 document.getElementById('safety-number-display').textContent = safetyNumber; document.getElementById('disappearing-select').value = AppState.disappearingTimerMs.toString();
+                
+                const isBlocked = AppState.currentUserData?.blocked?.includes(AppState.selectedUser.uid);
+                const btnBlock = document.getElementById('btn-block-contact');
+                if (btnBlock) btnBlock.textContent = isBlocked ? "Unblock Contact" : "Block Contact";
+                
                 Router.navigate(`app/chat/${AppState.selectedUser.uid}/security`);
             },
             hideSecurityModal() {
@@ -1240,6 +1401,31 @@
                 const content = document.getElementById('crypto-inspector-content');
                 content.classList.remove('modal-content-active'); content.classList.add('modal-content-hidden');
                 setTimeout(() => { modal.classList.remove('modal-active'); modal.classList.add('modal-hidden'); }, 200);
+            },
+            
+            showConfirmModal(title, desc, confirmText, confirmColor, onConfirm) {
+                const modal = document.getElementById('confirm-modal');
+                document.getElementById('confirm-modal-title').textContent = title;
+                document.getElementById('confirm-modal-desc').textContent = desc;
+                const btnProceed = document.getElementById('btn-confirm-proceed');
+                btnProceed.textContent = confirmText;
+                btnProceed.className = `flex-1 py-3 text-sm font-bold ${confirmColor} hover:bg-gray-800 transition-colors`;
+                
+                const cancelBtn = document.getElementById('btn-confirm-cancel');
+                
+                const cleanup = () => {
+                    modal.classList.remove('flex'); modal.classList.add('hidden');
+                    btnProceed.removeEventListener('click', proceedHandler);
+                    cancelBtn.removeEventListener('click', cancelHandler);
+                };
+                
+                const proceedHandler = () => { cleanup(); onConfirm(); };
+                const cancelHandler = () => { cleanup(); };
+                
+                btnProceed.addEventListener('click', proceedHandler);
+                cancelBtn.addEventListener('click', cancelHandler);
+                
+                modal.classList.remove('hidden'); modal.classList.add('flex');
             },
 
             escapeHTML(str) { if(!str) return ''; return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])); }
@@ -1283,7 +1469,8 @@
                     
                     await setDoc(userRef, {
                         uid: user.uid, username: defaultUsername || user.email || 'User', bio: 'Available', email: user.email || '', 
-                        photoURL: photoURL || user.photoURL || null, createdAt: new Date().toISOString(), isOnline: true, publicKey: publicKeyB64 
+                        photoURL: photoURL || user.photoURL || null, createdAt: new Date().toISOString(), isOnline: true, publicKey: publicKeyB64,
+                        blocked: []
                     }, { merge: true });
                     ToastManager.show("Account & Keys securely created!");
                     if(forceNew) setTimeout(() => location.reload(), 1000);
@@ -1406,6 +1593,19 @@
                 if (!AppState.selectedUser) return; await DataService.setDisappearingTimer(db, Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid), parseInt(e.target.value));
             });
 
+            document.getElementById('btn-block-contact')?.addEventListener('click', async () => {
+                if (!AppState.selectedUser) return;
+                const isBlocked = AppState.currentUserData?.blocked?.includes(AppState.selectedUser.uid);
+                try {
+                    const newBlocked = isBlocked
+                        ? (AppState.currentUserData.blocked || []).filter(id => id !== AppState.selectedUser.uid)
+                        : [...(AppState.currentUserData.blocked || []), AppState.selectedUser.uid];
+                    await updateDoc(doc(db, FIREBASE_PATHS.USERS, AppState.currentUser.uid), { blocked: newBlocked });
+                    ToastManager.show(isBlocked ? "Contact unblocked" : "Contact blocked");
+                    UI.hideSecurityModal();
+                } catch(e) { ToastManager.show("Action failed.", "error"); }
+            });
+
             document.getElementById('btn-chat-options-mobile')?.addEventListener('click', (e) => {
                 e.stopPropagation(); document.getElementById('chat-options-dropdown').classList.toggle('hidden');
             });
@@ -1504,8 +1704,22 @@
                 UI.hideContextMenu();
             });
 
-            document.getElementById('ctx-btn-delete')?.addEventListener('click', async () => {
-                if (UI.activeContextMenuParams && UI.activeContextMenuParams.isSelf) await DataService.deleteMessage(db, UI.activeContextMenuParams.convId, UI.activeContextMenuParams.msgId); UI.hideContextMenu();
+            document.getElementById('ctx-btn-delete')?.addEventListener('click', () => {
+                if (UI.activeContextMenuParams && UI.activeContextMenuParams.isSelf) {
+                    const params = UI.activeContextMenuParams;
+                    UI.hideContextMenu();
+                    UI.showConfirmModal(
+                        "Delete Message",
+                        "Are you sure you want to permanently delete this message for everyone? This action cannot be undone.",
+                        "Delete",
+                        "text-red-500",
+                        async () => {
+                            await DataService.deleteMessage(db, params.convId, params.msgId);
+                        }
+                    );
+                } else {
+                    UI.hideContextMenu();
+                }
             });
 
             document.getElementById('ctx-btn-pin')?.addEventListener('click', async () => {
@@ -1546,7 +1760,14 @@
                     
                     DataService.startUsersListener(db, user.uid, (users) => {
                         AppState.users = users; UI.renderUserList(users);
-                        if (AppState.selectedUser) { const updatedSelectedUser = users.find(u => u.uid === AppState.selectedUser.uid); if (updatedSelectedUser) { AppState.selectedUser = updatedSelectedUser; UI.updateChatHeader(updatedSelectedUser); } }
+                        if (AppState.selectedUser) { 
+                            const updatedSelectedUser = users.find(u => u.uid === AppState.selectedUser.uid); 
+                            if (updatedSelectedUser) { 
+                                AppState.selectedUser = updatedSelectedUser; 
+                                UI.updateChatHeader(updatedSelectedUser); 
+                                UI.updateInputState(updatedSelectedUser);
+                            } 
+                        }
                     });
                 } else {
                     if (AppState.currentUser) DataService.updatePresence(db, AppState.currentUser.uid, false);
@@ -1554,7 +1775,7 @@
                     if (AppState.unsubscribeUsers) AppState.unsubscribeUsers(); if (AppState.unsubscribeMessages) AppState.unsubscribeMessages();
                     if (AppState.unsubscribeConv) AppState.unsubscribeConv(); if (AppState.unsubscribeMe) AppState.unsubscribeMe();
                     if (AppState.unsubscribeAllConv) AppState.unsubscribeAllConv();
-                    document.getElementById('app-lock-screen').classList.replace('flex', 'hidden'); 
+                    document.getElementById('app-lock-screen').classList.remove('flex'); document.getElementById('app-lock-screen').classList.add('hidden'); 
                     if(window.location.hash.startsWith('#app')) Router.navigate('login');
                     else Router.handleRoute();
                 }
@@ -1695,7 +1916,7 @@
             <video id="local-video" class="w-full h-full object-cover transform scale-x-[-1]" autoplay playsinline muted></video>
         </div>
         <div class="absolute bottom-10 left-0 right-0 flex justify-center z-10">
-            <div class="bg-black/50 backdrop-blur-xl border border-white/10 px-8 py-4 rounded-full flex items-center space-x-6">
+            <div class="bg-black px-8 py-4 rounded-full flex items-center space-x-6 border border-gray-800">
                 <button id="btn-mute-call" class="w-12 h-12 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-white transition-colors shadow-lg">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
                 </button>
@@ -1792,10 +2013,10 @@
     </main>
 
     <main id="view-app" class="hidden w-full h-full absolute inset-0 flex flex-col relative z-10 bg-falconix-dark">
-        <div class="glass-panel w-full h-full flex overflow-hidden border-0 rounded-none shadow-none">
+        <div class="w-full h-full flex overflow-hidden bg-falconix-dark">
             
-            <aside id="app-sidebar" class="flex w-full sm:w-80 md:w-96 bg-gray-900/40 sm:border-r border-white/5 flex-col transition-all duration-300 z-20">
-                <header class="p-4 border-b border-white/5 flex justify-between items-center bg-black/20 shrink-0">
+            <aside id="app-sidebar" class="flex w-full sm:w-80 md:w-96 bg-gray-900 sm:border-r border-gray-800 flex-col transition-all duration-300 z-20">
+                <header class="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
                     <div class="flex flex-col">
                         <div class="flex items-center space-x-2.5">
                             <div class="w-8 h-8 rounded-full overflow-hidden shrink-0">
@@ -1810,15 +2031,15 @@
                     </div>
                     <div class="flex items-center space-x-1">
                         <button onclick="window.installApp()" class="p-2 text-emerald-400 hover:text-white hover:bg-gradient-to-r hover:from-emerald-500 hover:to-purple-600 rounded-lg transition-all" title="Download App"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11V3m0 0l-4 4m4-4l4 4"></path></svg></button>
-                        <button id="btn-open-settings" class="p-2 text-gray-400 hover:text-falconix-primary hover:bg-white/10 rounded-lg transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></button>
+                        <button id="btn-open-settings" class="p-2 text-gray-400 hover:text-falconix-primary hover:bg-gray-800 rounded-lg transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></button>
                     </div>
                 </header>
-                <div class="p-4"><input type="text" placeholder="Search contacts..." class="w-full bg-black/30 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white focus:border-falconix-primary focus:outline-none transition-colors"></div>
+                <div class="p-4"><input type="text" placeholder="Search contacts..." class="w-full bg-gray-800 border border-gray-700 rounded-xl py-2.5 px-4 text-sm text-white focus:border-falconix-primary focus:outline-none transition-colors"></div>
                 <div id="sidebar-user-list" class="flex-1 overflow-y-auto custom-scrollbar"></div>
             </aside>
 
-            <section id="app-chat-area" class="hidden sm:flex flex-1 flex-col bg-black/10 relative z-10 w-full h-full min-h-0 transition-all duration-300">
-                <div id="chat-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-center p-8 z-10">
+            <section id="app-chat-area" class="hidden sm:flex flex-1 flex-col bg-[#0a0f1c] relative z-10 w-full h-full min-h-0 transition-all duration-300">
+                <div id="chat-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-center p-8 z-10 bg-[#0a0f1c]">
                     <div class="flex items-center justify-center space-x-3 mb-4">
                         <div class="w-16 h-16 shrink-0 opacity-50 mix-blend-screen">
                             <img src="Falconix_Messenger_Logo.png" alt="Falconix Digital Logo" class="w-full h-full object-contain">
@@ -1831,13 +2052,13 @@
                     </div>
                 </div>
 
-                <div id="chat-active" class="hidden flex-col h-full w-full min-h-0 relative z-20 bg-gray-900/20 backdrop-blur-sm transition-all duration-300">
-                    <header class="h-14 sm:h-16 px-4 sm:px-6 border-b border-white/5 bg-black/50 backdrop-blur-md flex items-center justify-between z-30 shrink-0">
+                <div id="chat-active" class="hidden flex-col h-full w-full min-h-0 relative z-20 bg-[#0a0f1c] transition-all duration-300">
+                    <header class="h-14 sm:h-16 px-4 sm:px-6 border-b border-gray-800 bg-gray-900 flex items-center justify-between z-30 shrink-0">
                         <div class="flex items-center space-x-3 sm:space-x-4 min-w-0">
                             <button onclick="window.UI.closeMobileChat()" class="sm:hidden p-1.5 -ml-1.5 text-gray-400 hover:text-white rounded-lg transition-colors shrink-0">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
                             </button>
-                            <div id="chat-header-avatar" class="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-gray-700 to-gray-800 flex items-center justify-center shadow-lg overflow-hidden border border-white/10 shrink-0"></div>
+                            <div id="chat-header-avatar" class="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gray-800 flex items-center justify-center shadow-lg overflow-hidden border border-gray-700 shrink-0"></div>
                             <div class="min-w-0 flex flex-col">
                                 <h3 id="chat-header-name" class="font-semibold text-white tracking-wide text-sm sm:text-base truncate">Contact</h3>
                                 <div class="flex items-center overflow-hidden">
@@ -1848,7 +2069,7 @@
                         </div>
                         
                         <div class="flex items-center space-x-1 sm:space-x-2 text-gray-400 shrink-0 relative">
-                            <div id="chat-header-calls" class="flex items-center space-x-1 border-r border-white/10 pr-2 mr-1">
+                            <div id="chat-header-calls" class="flex items-center space-x-1 border-r border-gray-700 pr-2 mr-1">
                                 <button id="btn-start-audio-call" class="p-2 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors" title="Start Secure Voice Call"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg></button>
                                 <button id="btn-start-video-call" class="p-2 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors" title="Start Secure Video Call"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg></button>
                             </div>
@@ -1860,13 +2081,13 @@
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
                             </button>
 
-                            <div id="chat-options-dropdown" class="hidden absolute top-12 right-0 w-48 bg-gray-800/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-[100] flex flex-col overflow-hidden">
-                                <button id="btn-security-settings-mobile" class="w-full text-left px-4 py-3 text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors">
+                            <div id="chat-options-dropdown" class="hidden absolute top-12 right-0 w-48 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-[100] flex flex-col overflow-hidden">
+                                <button id="btn-security-settings-mobile" class="w-full text-left px-4 py-3 text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors">
                                     <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                                     <span>Security Settings</span>
                                 </button>
-                                <div class="h-px bg-white/5"></div>
-                                <button id="btn-chat-wallpaper-mobile" class="w-full text-left px-4 py-3 text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors">
+                                <div class="h-px bg-gray-800"></div>
+                                <button id="btn-chat-wallpaper-mobile" class="w-full text-left px-4 py-3 text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors">
                                     <svg class="w-4 h-4 text-falconix-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
                                     <span>Chat Wallpaper</span>
                                 </button>
@@ -1874,7 +2095,7 @@
                         </div>
                     </header>
 
-                    <div id="pinned-message-banner" class="hidden px-4 py-2 bg-falconix-primary/10 border-b border-falconix-primary/20 backdrop-blur-md flex items-center justify-between shadow-sm z-20 transition-all">
+                    <div id="pinned-message-banner" class="hidden px-4 py-2 bg-falconix-primary/10 border-b border-falconix-primary/20 flex items-center justify-between shadow-sm z-20 transition-all">
                         <div class="flex items-center space-x-3 overflow-hidden">
                             <svg class="w-4 h-4 text-falconix-primary flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M16 11V7c0-2.206-1.794-4-4-4S8 4.794 8 7v4H6v2h5v7h2v-7h5v-2h-2zm-6-4c0-1.103.897-2 2-2s2 .897 2 2v4h-4V7z"></path></svg>
                             <div class="flex flex-col overflow-hidden">
@@ -1887,13 +2108,13 @@
 
                     <div id="chat-message-list" class="flex-1 p-4 sm:p-6 overflow-y-auto custom-scrollbar flex flex-col space-y-4 z-20"></div>
 
-                    <footer class="p-2 sm:p-4 bg-black/50 backdrop-blur-md border-t border-white/5 relative z-30 shrink-0">
+                    <footer class="p-2 sm:p-4 bg-gray-900 border-t border-gray-800 relative z-30 shrink-0">
                         <div id="input-action-banner" class="absolute bottom-[100%] left-0 w-full px-4 hidden z-10"></div>
                         <div class="flex items-end space-x-1.5 sm:space-x-2">
                             <input type="file" id="chat-file-input" class="hidden" accept="image/*, application/pdf, text/plain">
                             <button id="btn-attach-file" class="p-2.5 sm:p-3 text-gray-400 hover:text-falconix-primary hover:bg-falconix-primary/10 rounded-xl transition-colors shrink-0"><svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg></button>
                             
-                            <div class="flex-1 bg-gray-900/80 border border-white/10 rounded-2xl overflow-hidden focus-within:border-falconix-primary/50 transition-all flex items-center">
+                            <div class="flex-1 bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden focus-within:border-falconix-primary/50 transition-all flex items-center">
                                 <div class="pl-3 sm:pl-4 text-emerald-400 opacity-70">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                                 </div>
@@ -1909,66 +2130,69 @@
         </div>
     </main>
 
-    <div id="security-modal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm modal-hidden transition-opacity duration-200 p-4">
-        <div id="security-modal-content" class="w-full max-w-md bg-gray-900 border border-white/10 rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden modal-content-hidden transition-transform duration-300 mx-auto">
-            <header class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-black/20 shrink-0">
+    <div id="security-modal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 modal-hidden transition-opacity duration-200 p-4">
+        <div id="security-modal-content" class="w-full max-w-md bg-gray-900 border border-gray-800 rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden modal-content-hidden transition-transform duration-300 mx-auto">
+            <header class="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
                 <h3 class="text-md font-bold text-white flex items-center"><svg class="w-5 h-5 mr-2 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg> End-to-End Security</h3>
                 <button id="btn-close-security" class="text-gray-400 hover:text-white"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             </header>
-            <div class="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+            <div class="p-6 space-y-6 overflow-y-auto custom-scrollbar bg-[#0a0f1c]">
                 <div>
                     <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Verify Safety Number</h4>
                     <p class="text-[11px] text-gray-500 mb-3 leading-relaxed">To verify that messages and calls with this contact are end-to-end encrypted, compare this number with them.</p>
-                    <div class="bg-black/30 border border-white/5 rounded-xl p-4 text-center"><p id="safety-number-display" class="text-lg font-mono text-emerald-400 tracking-[0.2em] break-words"></p></div>
+                    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 text-center"><p id="safety-number-display" class="text-lg font-mono text-emerald-400 tracking-[0.2em] break-words"></p></div>
                 </div>
                 <div>
                     <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Disappearing Messages</h4>
                     <p class="text-[11px] text-gray-500 mb-3 leading-relaxed">For more privacy, new messages will securely self-destruct from all devices and servers after the selected time.</p>
-                    <select id="disappearing-select" class="w-full bg-gray-800 border border-white/10 text-white text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-falconix-primary appearance-none custom-scrollbar">
+                    <select id="disappearing-select" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-falconix-primary appearance-none custom-scrollbar">
                         <option value="0">Off</option><option value="60000">1 Minute (Testing)</option><option value="3600000">1 Hour</option><option value="86400000">24 Hours</option>
                     </select>
+                </div>
+                <div class="pt-2">
+                    <button id="btn-block-contact" class="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold rounded-xl border border-red-500/20 transition-all text-sm">Block Contact</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="lightbox-modal" class="fixed inset-0 z-[100] bg-black/95 hidden items-center justify-center backdrop-blur-xl transition-opacity">
-        <button onclick="window.UI.hideLightbox()" class="absolute top-6 right-6 text-white/50 hover:text-white p-3 bg-white/5 hover:bg-white/10 rounded-full transition-all"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+    <div id="lightbox-modal" class="fixed inset-0 z-[100] bg-black/95 hidden items-center justify-center transition-opacity">
+        <button onclick="window.UI.hideLightbox()" class="absolute top-6 right-6 text-white/50 hover:text-white p-3 bg-gray-800 hover:bg-gray-700 rounded-full transition-all"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
         <img id="lightbox-img" src="" alt="Enlarged Image" class="max-w-[95vw] max-h-[95vh] object-contain rounded-xl shadow-2xl scale-95 transition-transform duration-300">
     </div>
 
-    <div id="wallpaper-modal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm modal-hidden transition-opacity duration-200 p-4">
-        <div class="w-full max-w-sm bg-gray-900 border border-white/10 rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden mx-auto">
-            <header class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-black/20 shrink-0">
+    <div id="wallpaper-modal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 modal-hidden transition-opacity duration-200 p-4">
+        <div class="w-full max-w-sm bg-gray-900 border border-gray-800 rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden mx-auto">
+            <header class="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
                 <h3 class="text-md font-bold text-white flex items-center"><svg class="w-4 h-4 mr-2 text-falconix-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg> Chat Wallpaper</h3>
                 <button id="btn-close-wallpaper" class="text-gray-400 hover:text-white"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             </header>
-            <div class="p-5 space-y-4 overflow-y-auto custom-scrollbar">
+            <div class="p-5 space-y-4 overflow-y-auto custom-scrollbar bg-[#0a0f1c]">
                 <p class="text-xs text-gray-400 uppercase tracking-wider font-semibold">Premium Gradients</p>
                 <div class="grid grid-cols-4 gap-3">
-                    <button class="wallpaper-preset w-full aspect-square rounded-xl border border-white/10 hover:ring-2 hover:ring-falconix-primary transition-all shadow-inner" data-bg="linear-gradient(to top, #09203f 0%, #537895 100%)" style="background: linear-gradient(to top, #09203f 0%, #537895 100%)"></button>
-                    <button class="wallpaper-preset w-full aspect-square rounded-xl border border-white/10 hover:ring-2 hover:ring-falconix-primary transition-all shadow-inner" data-bg="linear-gradient(to right, #141e30, #243b55)" style="background: linear-gradient(to right, #141e30, #243b55)"></button>
-                    <button class="wallpaper-preset w-full aspect-square rounded-xl border border-white/10 hover:ring-2 hover:ring-falconix-primary transition-all shadow-inner" data-bg="linear-gradient(to right, #240b36, #c31432)" style="background: linear-gradient(to right, #240b36, #c31432)"></button>
-                    <button class="wallpaper-preset w-full aspect-square rounded-xl border border-white/10 hover:ring-2 hover:ring-falconix-primary transition-all shadow-inner" data-bg="linear-gradient(to bottom, #000000, #434343)" style="background: linear-gradient(to bottom, #000000, #434343)"></button>
+                    <button class="wallpaper-preset w-full aspect-square rounded-xl border border-gray-700 hover:ring-2 hover:ring-falconix-primary transition-all shadow-inner" data-bg="linear-gradient(to top, #09203f 0%, #537895 100%)" style="background: linear-gradient(to top, #09203f 0%, #537895 100%)"></button>
+                    <button class="wallpaper-preset w-full aspect-square rounded-xl border border-gray-700 hover:ring-2 hover:ring-falconix-primary transition-all shadow-inner" data-bg="linear-gradient(to right, #141e30, #243b55)" style="background: linear-gradient(to right, #141e30, #243b55)"></button>
+                    <button class="wallpaper-preset w-full aspect-square rounded-xl border border-gray-700 hover:ring-2 hover:ring-falconix-primary transition-all shadow-inner" data-bg="linear-gradient(to right, #240b36, #c31432)" style="background: linear-gradient(to right, #240b36, #c31432)"></button>
+                    <button class="wallpaper-preset w-full aspect-square rounded-xl border border-gray-700 hover:ring-2 hover:ring-falconix-primary transition-all shadow-inner" data-bg="linear-gradient(to bottom, #000000, #434343)" style="background: linear-gradient(to bottom, #000000, #434343)"></button>
                 </div>
                 <p class="text-xs text-gray-400 uppercase tracking-wider font-semibold mt-4">Custom Image</p>
                 <input type="file" id="wallpaper-upload" class="hidden" accept="image/*">
-                <button onclick="document.getElementById('wallpaper-upload').click()" class="w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-medium transition-colors text-white">Upload from Device</button>
+                <button onclick="document.getElementById('wallpaper-upload').click()" class="w-full py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-sm font-medium transition-colors text-white">Upload from Device</button>
                 <button id="btn-wallpaper-clear" class="w-full py-2.5 mt-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-sm font-medium transition-colors border border-red-500/20">Remove Wallpaper</button>
             </div>
         </div>
     </div>
 
-    <div id="settings-modal" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm modal-hidden transition-opacity duration-200 p-4">
-        <div id="settings-modal-content" class="w-full max-w-md bg-gray-900 border border-white/10 rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden modal-content-hidden transition-transform duration-300 mx-auto">
-            <header class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-black/20 shrink-0">
+    <div id="settings-modal" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 modal-hidden transition-opacity duration-200 p-4">
+        <div id="settings-modal-content" class="w-full max-w-md bg-gray-900 border border-gray-800 rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden modal-content-hidden transition-transform duration-300 mx-auto">
+            <header class="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
                 <h3 class="text-lg font-bold text-white tracking-tight flex items-center">Settings</h3>
                 <div class="flex items-center space-x-1">
                     <button id="btn-header-logout" class="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Log Out"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg></button>
                     <button id="btn-close-settings" class="p-2 text-gray-400 hover:text-white rounded-lg transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
                 </div>
             </header>
-            <div class="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+            <div class="p-6 space-y-6 overflow-y-auto custom-scrollbar bg-[#0a0f1c]">
                 
                 <div>
                     <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Install App</h4>
@@ -1980,30 +2204,30 @@
 
                 <div>
                     <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Profile Details</h4>
-                    <div class="bg-black/30 border border-white/5 rounded-xl p-4 space-y-4">
+                    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 space-y-4">
                         <div class="flex items-center space-x-4">
-                            <div id="settings-avatar-preview" class="w-12 h-12 rounded-full bg-gray-800 border border-white/10 flex items-center justify-center overflow-hidden shrink-0"><svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>
+                            <div id="settings-avatar-preview" class="w-12 h-12 rounded-full bg-gray-900 border border-gray-700 flex items-center justify-center overflow-hidden shrink-0"><svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>
                             <div class="flex-1 flex items-center space-x-2">
                                 <input type="file" id="settings-avatar-upload" class="hidden" accept="image/*">
-                                <button onclick="document.getElementById('settings-avatar-upload').click()" class="text-xs bg-white/10 hover:bg-white/20 text-white py-1.5 px-3 rounded-lg transition-colors border border-white/10">Change Avatar</button>
+                                <button onclick="document.getElementById('settings-avatar-upload').click()" class="text-xs bg-gray-700 hover:bg-gray-600 text-white py-1.5 px-3 rounded-lg transition-colors border border-gray-600">Change Avatar</button>
                                 <button id="btn-remove-avatar" class="hidden text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 px-3 rounded-lg transition-colors border border-red-500/20">Remove</button>
                             </div>
                         </div>
                         <div>
                             <label class="block text-[10px] text-gray-500 uppercase mb-1">Name</label>
-                            <input type="text" id="settings-input-username" class="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-falconix-primary transition-colors">
+                            <input type="text" id="settings-input-username" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-falconix-primary transition-colors">
                         </div>
                         <div>
                             <label class="block text-[10px] text-gray-500 uppercase mb-1">About</label>
-                            <input type="text" id="settings-input-bio" placeholder="Available" class="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-falconix-primary transition-colors">
+                            <input type="text" id="settings-input-bio" placeholder="Available" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-falconix-primary transition-colors">
                         </div>
-                        <button id="btn-save-profile" class="w-full mt-2 py-2 bg-falconix-primary hover:opacity-90 text-white text-sm font-semibold rounded-lg transition-opacity">Save Profile</button>
+                        <button id="btn-save-profile" class="w-full mt-2 py-2 bg-falconix-primary hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition-colors">Save Profile</button>
                     </div>
                 </div>
 
                 <div>
                     <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Local Device Security</h4>
-                    <div class="bg-black/30 border border-white/5 rounded-xl p-4 flex items-center justify-between">
+                    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
                         <div>
                             <p class="text-sm font-medium text-white">App Lock (Passcode)</p><p class="text-xs text-gray-400 mt-0.5">Require a PIN to access this app.</p>
                         </div>
@@ -2013,30 +2237,30 @@
 
                 <div>
                     <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Accent Theme</h4>
-                    <div class="flex items-center space-x-3 bg-black/30 border border-white/5 rounded-xl p-4">
-                        <button onclick="window.ThemeService.apply('default')" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00a3ff] to-[#9d4edd] ring-2 ring-transparent hover:ring-white transition-all"></button>
-                        <button onclick="window.ThemeService.apply('emerald')" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#10b981] to-[#fbbf24] ring-2 ring-transparent hover:ring-white transition-all"></button>
-                        <button onclick="window.ThemeService.apply('crimson')" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#e11d48] to-[#f43f5e] ring-2 ring-transparent hover:ring-white transition-all"></button>
-                        <button onclick="window.ThemeService.apply('monochrome')" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#9ca3af] to-[#4b5563] ring-2 ring-transparent hover:ring-white transition-all"></button>
+                    <div class="flex items-center space-x-3 bg-gray-800 border border-gray-700 rounded-xl p-4">
+                        <button onclick="window.ThemeService.apply('default')" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00a3ff] to-[#9d4edd] ring-2 ring-transparent hover:ring-gray-400 transition-all"></button>
+                        <button onclick="window.ThemeService.apply('emerald')" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#10b981] to-[#fbbf24] ring-2 ring-transparent hover:ring-gray-400 transition-all"></button>
+                        <button onclick="window.ThemeService.apply('crimson')" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#e11d48] to-[#f43f5e] ring-2 ring-transparent hover:ring-gray-400 transition-all"></button>
+                        <button onclick="window.ThemeService.apply('monochrome')" class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#9ca3af] to-[#4b5563] ring-2 ring-transparent hover:ring-gray-400 transition-all"></button>
                     </div>
                 </div>
                 
                 <div>
                     <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Cryptographic Status</h4>
-                    <div class="bg-green-500/10 border border-green-500/20 rounded-xl p-4 flex items-start space-x-3">
+                    <div class="bg-gray-800 border border-green-500/30 rounded-xl p-4 flex items-start space-x-3">
                         <svg class="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                         <div>
                             <p class="text-sm font-medium text-green-400">Keys Secured Locally</p>
                             <p class="text-xs text-gray-400 mt-1 leading-relaxed">Your RSA-2048 private key is locked securely within this browser's IndexedDB.</p>
                             <div class="flex space-x-2 mt-3">
-                                <button id="btn-export-identity" class="text-xs bg-white/10 hover:bg-white/20 text-white py-1.5 px-3 rounded-lg transition-colors border border-white/10 shadow-sm">Export Backup</button>
+                                <button id="btn-export-identity" class="text-xs bg-gray-700 hover:bg-gray-600 text-white py-1.5 px-3 rounded-lg transition-colors border border-gray-600 shadow-sm">Export Backup</button>
                                 <input type="file" id="import-identity-input" class="hidden" accept=".json">
-                                <button onclick="document.getElementById('import-identity-input').click()" class="text-xs bg-white/10 hover:bg-white/20 text-white py-1.5 px-3 rounded-lg transition-colors border border-white/10 shadow-sm">Import Backup</button>
+                                <button onclick="document.getElementById('import-identity-input').click()" class="text-xs bg-gray-700 hover:bg-gray-600 text-white py-1.5 px-3 rounded-lg transition-colors border border-gray-600 shadow-sm">Import Backup</button>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="bg-black/30 border border-white/5 rounded-xl p-4 space-y-3">
+                <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 space-y-3">
                     <div><p class="text-[10px] text-gray-500 uppercase">Registered Email</p><p id="profile-email" class="text-sm font-medium text-white"></p></div>
                     <div><p class="text-[10px] text-gray-500 uppercase">System ID</p><p id="profile-uid" class="text-xs font-mono text-falconix-primary break-all"></p></div>
                 </div>
@@ -2044,57 +2268,67 @@
         </div>
     </div>
 
-    <div id="message-context-menu" class="fixed z-[80] w-48 bg-gray-800/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl py-2 context-menu-hidden transition-all duration-150 origin-top-left flex flex-col">
-        <div class="flex justify-around p-2 border-b border-white/5 bg-black/20">
+    <div id="message-context-menu" class="fixed z-[80] w-48 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl py-2 context-menu-hidden transition-all duration-150 origin-top-left flex flex-col">
+        <div class="flex justify-around p-2 border-b border-gray-800 bg-gray-800">
             <button class="emoji-react-btn text-xl sm:text-lg hover:scale-125 transition-transform p-1">👍</button>
             <button class="emoji-react-btn text-xl sm:text-lg hover:scale-125 transition-transform p-1">❤️</button>
             <button class="emoji-react-btn text-xl sm:text-lg hover:scale-125 transition-transform p-1">😂</button>
             <button class="emoji-react-btn text-xl sm:text-lg hover:scale-125 transition-transform p-1">😮</button>
         </div>
-        <button id="ctx-btn-reply" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-falconix-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg><span>Reply Securely</span></button>
-        <button id="ctx-btn-forward" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg><span>Forward Message</span></button>
-        <button id="ctx-btn-edit" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg><span>Edit Message</span></button>
-        <button id="ctx-btn-copy" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg><span>Copy Text</span></button>
-        <button id="ctx-btn-pin" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-falconix-primary" fill="currentColor" viewBox="0 0 24 24"><path d="M16 11V7c0-2.206-1.794-4-4-4S8 4.794 8 7v4H6v2h5v7h2v-7h5v-2h-2zm-6-4c0-1.103.897-2 2-2s2 .897 2 2v4h-4V7z"></path></svg><span>Pin Securely</span></button>
-        <button id="ctx-btn-inspect" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-white/10 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg><span>Inspect Encryption</span></button>
-        <div class="h-px bg-white/5 my-1"></div>
-        <button id="ctx-btn-delete" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center space-x-3 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span>Delete for Everyone</span></button>
+        <button id="ctx-btn-reply" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-falconix-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg><span>Reply Securely</span></button>
+        <button id="ctx-btn-forward" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg><span>Forward Message</span></button>
+        <button id="ctx-btn-edit" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg><span>Edit Message</span></button>
+        <button id="ctx-btn-copy" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg><span>Copy Text</span></button>
+        <button id="ctx-btn-pin" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-falconix-primary" fill="currentColor" viewBox="0 0 24 24"><path d="M16 11V7c0-2.206-1.794-4-4-4S8 4.794 8 7v4H6v2h5v7h2v-7h5v-2h-2zm-6-4c0-1.103.897-2 2-2s2 .897 2 2v4h-4V7z"></path></svg><span>Pin Securely</span></button>
+        <button id="ctx-btn-inspect" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white flex items-center space-x-3 transition-colors"><svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg><span>Inspect Encryption</span></button>
+        <div class="h-px bg-gray-800 my-1"></div>
+        <button id="ctx-btn-delete" class="w-full px-4 py-3 sm:py-2 text-left text-sm text-red-400 hover:bg-gray-800 hover:text-red-300 flex items-center space-x-3 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span>Delete for Everyone</span></button>
     </div>
 
-    <div id="crypto-inspector-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md modal-hidden transition-opacity duration-200 p-4">
-        <div id="crypto-inspector-content" class="w-full max-w-lg bg-gray-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden modal-content-hidden transition-transform duration-300 flex flex-col max-h-[90vh]">
-            <header class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-black/40 shrink-0">
+    <div id="crypto-inspector-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 modal-hidden transition-opacity duration-200 p-4">
+        <div id="crypto-inspector-content" class="w-full max-w-lg bg-gray-900 border border-gray-800 rounded-3xl shadow-2xl overflow-hidden modal-content-hidden transition-transform duration-300 flex flex-col max-h-[90vh]">
+            <header class="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
                 <h3 class="text-md font-bold text-white flex items-center"><svg class="w-5 h-5 mr-2 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg> Cryptographic Inspector</h3>
                 <button id="btn-close-inspector" class="text-gray-400 hover:text-white"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             </header>
             <div class="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1 bg-[#0a0c10]">
                 <p class="text-xs text-gray-400 mb-2 leading-relaxed">This is the exact payload retrieved from the server. Without your local RSA private key, this data is mathematically impossible to decrypt.</p>
-                
                 <div>
                     <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1 block">Ciphertext (AES-256-GCM)</span>
-                    <div class="bg-black/60 border border-white/5 rounded-lg p-3 font-mono text-xs text-gray-300 break-all h-24 overflow-y-auto custom-scrollbar shadow-inner" id="inspect-ciphertext"></div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3 font-mono text-xs text-gray-300 break-all h-24 overflow-y-auto custom-scrollbar shadow-inner" id="inspect-ciphertext"></div>
                 </div>
-                
                 <div>
                     <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1 block">Initialization Vector (IV)</span>
-                    <div class="bg-black/60 border border-white/5 rounded-lg p-3 font-mono text-xs text-gray-300 break-all shadow-inner" id="inspect-iv"></div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3 font-mono text-xs text-gray-300 break-all shadow-inner" id="inspect-iv"></div>
                 </div>
-                
                 <div>
                     <span class="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-1 block">Encrypted AES Key (RSA-OAEP)</span>
-                    <div class="bg-black/60 border border-white/5 rounded-lg p-3 font-mono text-xs text-gray-300 break-all h-24 overflow-y-auto custom-scrollbar shadow-inner" id="inspect-aeskey"></div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3 font-mono text-xs text-gray-300 break-all h-24 overflow-y-auto custom-scrollbar shadow-inner" id="inspect-aeskey"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="forward-modal" class="fixed inset-0 z-[110] bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
-        <div class="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-sm flex flex-col shadow-2xl overflow-hidden animate-slide-up max-h-[85vh]">
-            <header class="p-4 border-b border-white/10 flex justify-between items-center bg-black/20 shrink-0">
+    <div id="forward-modal" class="fixed inset-0 z-[110] bg-black/80 hidden items-center justify-center p-4">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-sm flex flex-col shadow-2xl overflow-hidden animate-slide-up max-h-[85vh]">
+            <header class="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
                 <h3 class="text-white font-bold text-sm tracking-wide">Forward to Contact</h3>
                 <button onclick="window.UI.hideForwardModal()" class="text-gray-400 hover:text-white"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             </header>
-            <div id="forward-user-list" class="flex-1 overflow-y-auto custom-scrollbar bg-gray-900"></div>
+            <div id="forward-user-list" class="flex-1 overflow-y-auto custom-scrollbar bg-[#0a0f1c]"></div>
+        </div>
+    </div>
+    
+    <div id="confirm-modal" class="fixed inset-0 z-[400] bg-black/80 hidden items-center justify-center p-4 transition-opacity">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-sm flex flex-col shadow-2xl animate-slide-up overflow-hidden">
+            <div class="p-6">
+                <h3 id="confirm-modal-title" class="text-white font-bold text-lg mb-2">Confirm Action</h3>
+                <p id="confirm-modal-desc" class="text-sm text-gray-400">Are you sure you want to proceed?</p>
+            </div>
+            <div class="flex border-t border-gray-800">
+                <button id="btn-confirm-cancel" class="flex-1 py-3 text-sm font-medium text-gray-400 hover:bg-gray-800 transition-colors border-r border-gray-800">Cancel</button>
+                <button id="btn-confirm-proceed" class="flex-1 py-3 text-sm font-bold transition-colors">Confirm</button>
+            </div>
         </div>
     </div>
 
