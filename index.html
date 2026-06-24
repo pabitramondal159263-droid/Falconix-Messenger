@@ -709,6 +709,7 @@
 
                 } catch (error) { ToastManager.show("Secure transfer failed.", "error"); }
             },
+
             async handleMessagesSnapshot(messages) {
                 const list = document.getElementById('chat-message-list');
                 if (!AppState.localKeys) return;
@@ -745,18 +746,30 @@
                     processedIds.add(msg.id);
 
                     try {
-                        const targetEncryptedAesKey = msg.senderUid === AppState.currentUser.uid ? msg.senderEncryptedAesKey : msg.encryptedAesKey;
-                        let decryptedText = ""; let fileData = null;
-
                         const existingWrapper = document.getElementById(`msg-bubble-${msg.id}`);
-                        if (existingWrapper && existingWrapper.getAttribute('data-raw-status') === (msg.status || 'sent') && existingWrapper.getAttribute('data-raw-reactions') === JSON.stringify(msg.reactions||{}) && existingWrapper.getAttribute('data-raw-edited') === String(!!msg.isEdited)) {
-                            if (msg.id === AppState.pinnedMsgId) { pinnedMsgFound = true; UI.updatePinnedBanner(existingWrapper.getAttribute('data-decrypted-text') || ''); }
+                        const isEditedNow = !!msg.isEdited;
+                        const wasEditedBefore = existingWrapper ? existingWrapper.getAttribute('data-raw-edited') === 'true' : false;
+
+                        if (existingWrapper && existingWrapper.hasAttribute('data-decrypted-text') && (isEditedNow === wasEditedBefore)) {
+                            const decryptedText = existingWrapper.getAttribute('data-decrypted-text');
                             
-                            if (convId && msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') {
-                                DataService.markMessageRead(db, convId, msg.id);
-                            }
+                            if (msg.id === AppState.pinnedMsgId) { UI.updatePinnedBanner(decryptedText); pinnedMsgFound = true; }
+                            if (convId && msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') { DataService.markMessageRead(db, convId, msg.id); }
+
+                            UI.appendMessage({
+                                id: msg.id, text: decryptedText, timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(),
+                                isSelf: msg.senderUid === AppState.currentUser.uid, status: msg.status || 'sent', 
+                                isEdited: msg.isEdited, reactions: msg.reactions || {}, expiresAt: msg.expiresAt || null
+                            });
+
+                            existingWrapper.setAttribute('data-raw-status', msg.status || 'sent');
+                            existingWrapper.setAttribute('data-raw-reactions', JSON.stringify(msg.reactions||{}));
+                            
                             continue;
                         }
+
+                        const targetEncryptedAesKey = msg.senderUid === AppState.currentUser.uid ? msg.senderEncryptedAesKey : msg.encryptedAesKey;
+                        let decryptedText = ""; let fileData = null;
 
                         if (targetEncryptedAesKey) {
                             const rawAesKey = await RSA.decryptData(privateKey, targetEncryptedAesKey);
@@ -821,6 +834,7 @@
                     }
                 });
             }
+
         };
 
         const CallService = {
@@ -996,21 +1010,37 @@
                 }
             },
 
-            renderUserList(users) {
+renderUserList(users) {
                 const listContainer = document.getElementById('sidebar-user-list');
                 if (!listContainer) return; listContainer.innerHTML = '';
                 if (users.length === 0) { listContainer.innerHTML = '<p class="text-gray-500 text-sm p-4 text-center">No contacts found.</p>'; return; }
 
                 const sortedUsers = [...users].sort((a, b) => {
-                    if (a.isVault) return -1; if (b.isVault) return 1;
+                    if (a.isVault) return -1; 
+                    if (b.isVault) return 1;
+
                     const convIdA = Helpers.getConversationId(AppState.currentUser.uid, a.uid);
                     const convIdB = Helpers.getConversationId(AppState.currentUser.uid, b.uid);
                     const timeA = (AppState.conversations && AppState.conversations[convIdA]?.lastMessageAt) || 0;
                     const timeB = (AppState.conversations && AppState.conversations[convIdB]?.lastMessageAt) || 0;
                     
-                    if (timeA > 0 && timeB > 0) return timeB - timeA;
-                    if (timeA > 0 && timeB === 0) return -1;
-                    if (timeB > 0 && timeA === 0) return 1;
+                    if (timeA > 0 || timeB > 0) {
+                        return timeB - timeA;
+                    }
+
+                    const getSeenTime = (user) => {
+                        if (user.isOnline) return Date.now();
+                        if (!user.lastSeen) return 0;
+                        return user.lastSeen.toMillis ? user.lastSeen.toMillis() : new Date(user.lastSeen).getTime();
+                    };
+
+                    const seenA = getSeenTime(a);
+                    const seenB = getSeenTime(b);
+
+                    if (seenA !== seenB) {
+                        return seenB - seenA; 
+                    }
+
                     return (a.username || '').localeCompare(b.username || '');
                 });
 
@@ -1064,7 +1094,7 @@
                     listContainer.appendChild(el);
                 });
             },
-            
+
             updateChatHeader(user, isTyping = false) {
                 const iAmBlocked = user.blocked?.includes(AppState.currentUser.uid);
                 const iBlockedThem = AppState.currentUserData?.blocked?.includes(user.uid);
