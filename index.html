@@ -576,7 +576,8 @@
         const AppState = {
             currentUser: null, currentUserData: null, users: [], selectedUser: null, localKeys: null, conversations: {},
             unsubscribeUsers: null, unsubscribeMessages: null, unsubscribeConv: null, unsubscribeMe: null, unsubscribeAllConv: null,
-            replyToMsg: null, editingMsgId: null, disappearingTimerMs: 0, pinnedMsgId: null, forwardingMsg: null
+            replyToMsg: null, editingMsgId: null, disappearingTimerMs: 0, pinnedMsgId: null, forwardingMsg: null,
+            chatInitialLoad: false, currentUnreadCount: 0
         };
 
         const DataService = {
@@ -616,34 +617,7 @@
                 if (AppState.unsubscribeAllConv) AppState.unsubscribeAllConv();
                 AppState.unsubscribeAllConv = onSnapshot(collection(db, FIREBASE_PATHS.CONVERSATIONS), (snapshot) => {
                     AppState.conversations = {};
-                    let totalUnread = 0;
-
-                    snapshot.forEach(doc => { 
-                        const data = doc.data();
-                        AppState.conversations[doc.id] = data; 
-                        
-                        if (AppState.currentUser) {
-                            const unreadForMe = data[`unread_${AppState.currentUser.uid}`] || 0;
-                            if (!AppState.selectedUser || !doc.id.includes(AppState.selectedUser.uid)) {
-                                totalUnread += unreadForMe;
-                            }
-                        }
-                    });
-
-                    if (totalUnread > 0) {
-                        document.title = `(${totalUnread}) Falconix Messenger`;
-                    } else {
-                        document.title = `Falconix Messenger – Secure End-to-End Encrypted Messaging`;
-                    }
-
-                    if ('setAppBadge' in navigator) {
-                        if (totalUnread > 0) {
-                            navigator.setAppBadge(totalUnread).catch(() => {});
-                        } else {
-                            navigator.clearAppBadge().catch(() => {});
-                        }
-                    }
-
+                    snapshot.forEach(doc => { AppState.conversations[doc.id] = doc.data(); });
                     UI.renderUserList(AppState.users); 
                 });
             },
@@ -788,7 +762,9 @@
             async handleMessagesSnapshot(messages) {
                 const list = document.getElementById('chat-message-list');
                 if (!AppState.localKeys) return;
-
+                if (AppState.chatInitialLoad) {
+                    list.style.opacity = '0';
+                }
                 const privateKey = await RSA.importPrivateKey(AppState.localKeys.privateKeyB64);
 
                 let securityBanner = document.getElementById('security-banner-msg');
@@ -929,6 +905,37 @@
                         }
                     }
                 });
+
+                if (AppState.chatInitialLoad) {
+                    AppState.chatInitialLoad = false;
+                    
+                    if (AppState.currentUnreadCount > 0) {
+                        const allBubblesArray = Array.from(list.querySelectorAll('.msg-bubble-wrapper'));
+                        const unreadMsgs = allBubblesArray.slice(-AppState.currentUnreadCount);
+                        
+                        if (unreadMsgs.length > 0) {
+                            const separator = document.createElement('div');
+                            separator.id = 'new-messages-separator';
+                            separator.className = 'flex justify-center my-6 w-full shrink-0 z-10';
+                            separator.innerHTML = `<span class="px-4 py-1.5 bg-falconix-primary/10 border border-falconix-primary/30 rounded-full text-[11px] text-falconix-primary font-bold tracking-widest uppercase shadow-sm backdrop-blur-md">↓ ${AppState.currentUnreadCount} New Messages ↓</span>`;
+                            list.insertBefore(separator, unreadMsgs[0]);
+                            
+                            separator.scrollIntoView({ behavior: 'instant', block: 'center' });
+                        }
+                    } else {
+                        list.scrollTop = list.scrollHeight;
+                    }
+                    
+                    requestAnimationFrame(() => {
+                        list.style.transition = 'opacity 0.3s ease-out';
+                        list.style.opacity = '1';
+                    });
+                } else {
+                    const isNearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 250;
+                    if (isNearBottom || messages[messages.length - 1]?.senderUid === AppState.currentUser.uid) {
+                        list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
+                    }
+                }
             }
 
         };
@@ -1080,6 +1087,7 @@
                 
                 AppState.selectedUser = null; 
                 this.clearInputBanners(); 
+                this.clearUnreadSeparator();
                 Router.navigate('app');
             },
 
@@ -1106,7 +1114,7 @@
                 }
             },
 
-    renderUserList(users) {
+            renderUserList(users) {
                 const listContainer = document.getElementById('sidebar-user-list');
                 if (!listContainer) return; listContainer.innerHTML = '';
                 if (users.length === 0) { listContainer.innerHTML = '<p class="text-gray-500 text-sm p-4 text-center">No contacts found.</p>'; return; }
@@ -1266,6 +1274,10 @@
                 const convId = Helpers.getConversationId(AppState.currentUser.uid, user.uid);
                 WallpaperService.apply(convId);
                 
+
+                AppState.chatInitialLoad = true;
+                AppState.currentUnreadCount = 0;
+
                 document.getElementById('chat-message-list').innerHTML = `<div id="loading-spinner" class="flex items-center justify-center h-full"><div class="animate-pulse flex flex-col items-center"><div class="w-8 h-8 border-4 border-falconix-primary border-t-transparent rounded-full animate-spin mb-4"></div><p class="text-sm text-gray-400">Decrypting secure channel...</p></div></div>`;
 
                 DataService.startConversationListener(db, convId, (data) => {
@@ -1277,6 +1289,9 @@
                         if(data && data.pinnedMsgId) AppState.pinnedMsgId = data.pinnedMsgId; else { AppState.pinnedMsgId = null; this.updatePinnedBanner(null); }
                         
                         if (data && data[`unread_${AppState.currentUser.uid}`] > 0) {
+                            if(AppState.chatInitialLoad) {
+                                AppState.currentUnreadCount = data[`unread_${AppState.currentUser.uid}`];
+                            }
                             updateDoc(doc(db, FIREBASE_PATHS.CONVERSATIONS, convId), { [`unread_${AppState.currentUser.uid}`]: 0 }).catch(()=>{});
                         }
                     }
@@ -1506,11 +1521,6 @@
 
                     wrapper.addEventListener('touchend', resetSwipe); wrapper.addEventListener('touchcancel', resetSwipe);
                     list.appendChild(wrapper);
-
-                    const isNearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 150;
-                    if (msg.isSelf || isNearBottom) {
-                        setTimeout(() => list.scrollTop = list.scrollHeight, 50);
-                    }
                 }
 
                 if (msg.fileData) {
@@ -1794,7 +1804,16 @@
             showFeedbackModal() { document.getElementById('feedback-modal').classList.remove('hidden'); document.getElementById('feedback-modal').classList.add('flex'); },
             hideFeedbackModal() { document.getElementById('feedback-modal').classList.add('hidden'); document.getElementById('feedback-modal').classList.remove('flex'); },
 
-            escapeHTML(str) { if(!str) return ''; return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])); }
+            escapeHTML(str) { if(!str) return ''; return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])); },
+
+            clearUnreadSeparator() {
+                const sep = document.getElementById('new-messages-separator');
+                if (sep) {
+                    sep.style.opacity = '0';
+                    setTimeout(() => sep.remove(), 300);
+                }
+                AppState.currentUnreadCount = 0;
+            },
         };
         window.UI = UI;
 
@@ -2175,7 +2194,11 @@
             let typingTimeout;
             chatInput?.addEventListener('input', () => {
                 if (!AppState.selectedUser) return;
-                ChatService.setTyping(db, AppState.selectedUser.uid, true); clearTimeout(typingTimeout); typingTimeout = setTimeout(() => { ChatService.setTyping(db, AppState.selectedUser.uid, false); }, 2000);
+                UI.clearUnreadSeparator(); 
+
+                ChatService.setTyping(db, AppState.selectedUser.uid, true); 
+                clearTimeout(typingTimeout); 
+                typingTimeout = setTimeout(() => { ChatService.setTyping(db, AppState.selectedUser.uid, false); }, 2000);
             });
 
             chatInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } });
