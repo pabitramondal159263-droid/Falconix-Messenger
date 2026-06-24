@@ -153,7 +153,8 @@
             GoogleAuthProvider, signInWithPopup, sendEmailVerification, updateProfile
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
-            getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, arrayUnion, increment
+            getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, arrayUnion, increment,
+            query, orderBy, limit
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'falconix-messenger-v1';
@@ -577,7 +578,8 @@
             currentUser: null, currentUserData: null, users: [], selectedUser: null, localKeys: null, conversations: {},
             unsubscribeUsers: null, unsubscribeMessages: null, unsubscribeConv: null, unsubscribeMe: null, unsubscribeAllConv: null,
             replyToMsg: null, editingMsgId: null, disappearingTimerMs: 0, pinnedMsgId: null, forwardingMsg: null,
-            chatInitialLoad: false, currentUnreadCount: 0
+            chatInitialLoad: false, currentUnreadCount: 0,
+            messageLimit: 50, isFetchingMore: false
         };
 
         const DataService = {
@@ -631,14 +633,25 @@
                     callback(users);
                 });
             },
-            startMessageListener(db, convId, callback) {
+            startMessageListener(db, convId, messageLimit, callback) {
                 if (AppState.unsubscribeMessages) AppState.unsubscribeMessages();
-                AppState.unsubscribeMessages = onSnapshot(collection(db, FIREBASE_PATHS.MESSAGES(convId)), (snapshot) => {
-                    const messages = []; snapshot.forEach(doc => messages.push({ id: doc.id, ...doc.data() }));
-                    messages.sort((a, b) => (a.timestamp?.toMillis() || Date.now()) - (b.timestamp?.toMillis() || Date.now()));
+                
+                const q = query(
+                    collection(db, FIREBASE_PATHS.MESSAGES(convId)), 
+                    orderBy("timestamp", "desc"), 
+                    limit(messageLimit)
+                );
+
+                AppState.unsubscribeMessages = onSnapshot(q, (snapshot) => {
+                    const messages = []; 
+                    snapshot.forEach(doc => messages.push({ id: doc.id, ...doc.data() }));
+                    
+                    messages.reverse();
+                    
                     callback(messages);
                 });
             },
+
             startConversationListener(db, convId, callback) {
                 if (AppState.unsubscribeConv) AppState.unsubscribeConv();
                 AppState.unsubscribeConv = onSnapshot(doc(db, FIREBASE_PATHS.CONVERSATIONS, convId), (docSnap) => {
@@ -1261,6 +1274,8 @@
 
             selectUser(user) {
                 AppState.selectedUser = user;
+                AppState.messageLimit = 50;
+                AppState.isFetchingMore = false;
                 document.getElementById('chat-placeholder').classList.add('hidden');
                 document.getElementById('chat-active').classList.remove('hidden');
                 document.getElementById('chat-active').classList.add('flex');
@@ -1297,8 +1312,36 @@
                     }
                 });
 
-                DataService.startMessageListener(db, convId, (messages) => ChatService.handleMessagesSnapshot(messages));
+                DataService.startMessageListener(db, convId, AppState.messageLimit, (messages) => ChatService.handleMessagesSnapshot(messages));
                 CallService.listenForIncoming();
+
+                const list = document.getElementById('chat-message-list');
+                
+                list.onscroll = null; 
+                
+                list.onscroll = () => {
+                    if (list.scrollTop === 0 && !AppState.isFetchingMore && messages.length >= AppState.messageLimit) {
+                        AppState.isFetchingMore = true;
+                        
+                        const previousScrollHeight = list.scrollHeight;
+                        
+                        const loader = document.createElement('div');
+                        loader.id = 'pagination-loader';
+                        loader.className = 'w-full text-center py-2 text-xs text-gray-500 flex justify-center';
+                        loader.innerHTML = '<div class="w-4 h-4 border-2 border-falconix-primary border-t-transparent rounded-full animate-spin"></div>';
+                        list.prepend(loader);
+
+                        AppState.messageLimit += 50;
+                        
+                        DataService.startMessageListener(db, convId, AppState.messageLimit, (newMessages) => {
+                            ChatService.handleMessagesSnapshot(newMessages).then(() => {
+                                document.getElementById('pagination-loader')?.remove();
+                                list.scrollTop = list.scrollHeight - previousScrollHeight;
+                                AppState.isFetchingMore = false;
+                            });
+                        });
+                    }
+                };
             },
 
             scrollToMessage(msgId) {
