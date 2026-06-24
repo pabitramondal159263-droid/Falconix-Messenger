@@ -118,10 +118,9 @@
         html.dark .light-icon { display: none; }
 
         .status-wrapper {
-            container-type: inline-size;
+            --wrap-width: 135px;
             display: inline-flex;
-            width: 100%;
-            max-width: 150px; 
+            max-width: var(--wrap-width); 
             overflow: hidden;
             white-space: nowrap;
             mask-image: linear-gradient(to right, black 85%, transparent 100%);
@@ -129,19 +128,19 @@
         }
 
         @media (min-width: 640px) {
-            .status-wrapper { max-width: 220px; }
+            .status-wrapper { --wrap-width: 220px; }
         }
 
         .status-text {
             display: inline-block;
             white-space: nowrap;
             padding-right: 12px;
-            animation: scroll-status 6s ease-in-out infinite alternate; 
+            animation: scroll-status 5s ease-in-out infinite alternate;
         }
 
         @keyframes scroll-status {
             0%, 20% { transform: translateX(0); }
-            80%, 100% { transform: translateX(min(0px, calc(100cqi - 100%))); }
+            80%, 100% { transform: translateX(min(0px, calc(var(--wrap-width) - 100%))); }
         }
     </style>
 
@@ -1064,7 +1063,7 @@
                     }
 
                     const unreadBadgeHtml = unreadCount > 0 
-                        ? `<div class="bg-falconix-primary text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-lg ml-2 relative"><span class="absolute inline-flex h-full w-full rounded-full bg-falconix-primary opacity-75 animate-ping-badge inset-0"></span><span class="relative z-10">${unreadCount}</span></div>` 
+                        ? `<div class="bg-falconix-primary text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-lg ml-2 relative shrink-0"><span class="absolute inline-flex h-full w-full rounded-full bg-falconix-primary opacity-75 animate-ping-badge inset-0"></span><span class="relative z-10">${unreadCount}</span></div>` 
                         : '';
 
                     const iAmBlocked = user.blocked?.includes(AppState.currentUser.uid);
@@ -1086,8 +1085,8 @@
                         <div class="flex-1 min-w-0 flex flex-col justify-center select-user-target">
                             <div class="flex justify-between items-center">
                                 <h4 class="text-white text-sm font-semibold truncate group-hover:text-falconix-primary transition-colors pr-2 ${grayClass}">${this.escapeHTML(user.username)}</h4>
-                                <div class="flex items-center shrink-0 ml-2 overflow-hidden">
-                                    <span class="text-[10px] ${isOnline ? 'text-emerald-400' : 'text-gray-500'} font-medium truncate max-w-[110px] sm:max-w-[130px] text-right" title="${statusText}">${statusText}</span>
+                                <div class="flex items-center shrink-0 ml-2">
+                                    <span class="text-[10px] ${isOnline ? 'text-emerald-400' : 'text-gray-500'} font-medium truncate max-w-[110px] sm:max-w-[120px] text-right" title="${statusText}">${statusText}</span>
                                     ${unreadBadgeHtml}
                                 </div>
                             </div>
@@ -1133,7 +1132,8 @@
                     const bioStr = (iAmBlocked || iBlockedThem) ? '' : (user.bio ? `<span class="hidden sm:inline-block mx-1.5 text-gray-600 shrink-0">•</span><span class="hidden sm:inline-block text-[11px] text-gray-400 truncate max-w-[180px]">${this.escapeHTML(user.bio)}</span>` : '');
                     const statusText = isOnline ? 'Online' : (user.lastSeen && user.showLastSeen !== false ? Helpers.formatLastSeen(user.lastSeen) : 'Offline');
                     
-                statusContainer.innerHTML = `
+                    statusContainer.innerHTML = `
+                        <span class="w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-gray-500'} shrink-0 mr-1.5 mt-0.5"></span>
                         <div class="status-wrapper">
                             <span class="status-text text-[11px] ${isOnline ? 'text-emerald-400' : 'text-gray-400'} font-medium tracking-wide">
                                 ${statusText}
