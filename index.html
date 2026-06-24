@@ -816,6 +816,7 @@
                     const processedIds = new Set();
                     let processedCount = 0;
                     let previousWrapper = null;
+
                     for (const msg of messages) {
                         if (msg.expiresAt && msg.expiresAt < now) { DataService.deleteMessage(db, convId, msg.id); continue; }
                         processedIds.add(msg.id);
@@ -835,10 +836,12 @@
                                     id: msg.id, text: decryptedText, timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(),
                                     isSelf: msg.senderUid === AppState.currentUser.uid, status: msg.status || 'sent', 
                                     isEdited: msg.isEdited, reactions: msg.reactions || {}, expiresAt: msg.expiresAt || null
-                                });
+                                }, previousWrapper);
 
                                 existingWrapper.setAttribute('data-raw-status', msg.status || 'sent');
                                 existingWrapper.setAttribute('data-raw-reactions', JSON.stringify(msg.reactions||{}));
+                                
+                                previousWrapper = existingWrapper;
                                 continue;
                             }
 
@@ -874,7 +877,7 @@
                                 isSelf: msg.senderUid === AppState.currentUser.uid, status: msg.status || 'sent', fileData: fileData,
                                 isEdited: msg.isEdited, reactions: msg.reactions || {}, expiresAt: msg.expiresAt || null,
                                 rawCrypto: { ciphertext: msg.ciphertext, iv: msg.iv, encryptedAesKey: targetEncryptedAesKey }
-                            });
+                            }, previousWrapper);
 
                             const newlyAppended = document.getElementById(`msg-bubble-${msg.id}`);
                             if(newlyAppended) {
@@ -883,13 +886,16 @@
                                 newlyAppended.setAttribute('data-raw-edited', String(!!msg.isEdited));
                                 newlyAppended.setAttribute('data-decrypted-text', decryptedText);
                             }
+                            
+                            previousWrapper = newlyAppended;
 
                             if (convId && msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') {
                                 DataService.markMessageRead(db, convId, msg.id);
                             }
 
                         } catch (err) {
-                            UI.appendMessage({ id: msg.id, text: "[Decryption Failed]", timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(), isSelf: msg.senderUid === AppState.currentUser.uid, status: 'error' });
+                            UI.appendMessage({ id: msg.id, text: "[Decryption Failed]", timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(), isSelf: msg.senderUid === AppState.currentUser.uid, status: 'error' }, previousWrapper);
+                            previousWrapper = document.getElementById(`msg-bubble-${msg.id}`);
                         }
 
                         processedCount++;
@@ -963,7 +969,7 @@
                 });
             }
         };
-
+        
         const CallService = {
             pc: null, localStream: null, remoteStream: null, unsubCall: null, isCaller: false, convId: null,
 
@@ -1390,7 +1396,7 @@
                 } catch(e) {}
             },
 
-            appendMessage(msg) {
+            appendMessage(msg, previousNode = null) {
                 const list = document.getElementById('chat-message-list');
                 let wrapper = document.getElementById(`msg-bubble-${msg.id}`);
                 const isNew = !wrapper;
@@ -1575,20 +1581,17 @@
                         }
                     };
 
-                    wrapper.addEventListener('touchend', resetSwipe); wrapper.addEventListener('touchcancel', resetSwipe);
-                    if (previousWrapper) {
-                                previousWrapper.after(wrapper);
-                            } else {
-                                const secBanner = document.getElementById('security-banner-msg');
-                                if (secBanner) secBanner.after(wrapper);
-                                else list.prepend(wrapper);
-                            }
-                        }
-                        
-                        previousWrapper = wrapper;
-
-                        if (msg.fileData) {
-                            const decryptBtn = wrapper.querySelector(`#btn-decrypt-${msg.id}`);
+                    wrapper.addEventListener('touchend', resetSwipe); 
+                    wrapper.addEventListener('touchcancel', resetSwipe);
+                    
+                    // Uses previousNode to safely position the chat bubbles correctly
+                    if (previousNode) {
+                        previousNode.after(wrapper);
+                    } else {
+                        const secBanner = document.getElementById('security-banner-msg');
+                        if (secBanner) secBanner.after(wrapper);
+                        else list.prepend(wrapper);
+                    }
                 }
 
                 if (msg.fileData) {
@@ -1616,7 +1619,6 @@
                     });
                 }
             },
-
             showContextMenu(x, y, msg, convId) {
                 const menu = document.getElementById('message-context-menu');
                 this.activeContextMenuParams = { msgId: msg.id, text: msg.text, convId: convId, isSelf: msg.isSelf, timestamp: msg.timestamp, rawCrypto: msg.rawCrypto, fileData: msg.fileData };
