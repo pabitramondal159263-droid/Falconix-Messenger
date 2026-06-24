@@ -773,184 +773,195 @@
             },
 
             async handleMessagesSnapshot(messages) {
-                const list = document.getElementById('chat-message-list');
-                if (!AppState.localKeys) return;
-                if (AppState.chatInitialLoad) {
-                    list.style.opacity = '0';
-                }
-                const privateKey = await RSA.importPrivateKey(AppState.localKeys.privateKeyB64);
+                return new Promise(async (resolve) => {
+                    const list = document.getElementById('chat-message-list');
+                    
+                    if (!AppState.localKeys) {
+                        resolve();
+                        return; 
+                    }
+                    
+                    if (AppState.chatInitialLoad) {
+                        list.style.opacity = '0';
+                    }
+                    const privateKey = await RSA.importPrivateKey(AppState.localKeys.privateKeyB64);
 
-                let securityBanner = document.getElementById('security-banner-msg');
-                if (!securityBanner) {
-                    securityBanner = document.createElement('div');
-                    securityBanner.id = 'security-banner-msg';
-                    securityBanner.className = 'flex justify-center mb-6 mt-2 w-full animate-slide-up shrink-0';
-                    securityBanner.innerHTML = `
-                        <div class="bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 flex items-center shadow-sm max-w-sm text-center">
-                            <svg class="w-4 h-4 text-emerald-400 mr-2.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                            <p class="text-[10px] sm:text-xs text-emerald-400/90 font-medium leading-relaxed">Messages to this contact are secured with AES-256-GCM encryption.</p>
-                        </div>
-                    `;
-                    list.appendChild(securityBanner);
-                }
+                    let securityBanner = document.getElementById('security-banner-msg');
+                    if (!securityBanner) {
+                        securityBanner = document.createElement('div');
+                        securityBanner.id = 'security-banner-msg';
+                        securityBanner.className = 'flex justify-center mb-6 mt-2 w-full animate-slide-up shrink-0';
+                        securityBanner.innerHTML = `
+                            <div class="bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 flex items-center shadow-sm max-w-sm text-center">
+                                <svg class="w-4 h-4 text-emerald-400 mr-2.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                                <p class="text-[10px] sm:text-xs text-emerald-400/90 font-medium leading-relaxed">Messages to this contact are secured with AES-256-GCM encryption.</p>
+                            </div>
+                        `;
+                        list.appendChild(securityBanner);
+                    }
 
-                const spinner = document.getElementById('loading-spinner');
-                if (spinner) spinner.remove();
+                    const spinner = document.getElementById('loading-spinner');
+                    if (spinner) spinner.remove();
 
-                if (messages.length === 0) { UI.updatePinnedBanner(null); return; }
+                    if (messages.length === 0) { 
+                        UI.updatePinnedBanner(null); 
+                        resolve();
+                        return; 
+                    }
 
-                const convId = AppState.selectedUser ? Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid) : null;
-                const now = Date.now();
-                let pinnedMsgFound = false;
+                    const convId = AppState.selectedUser ? Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid) : null;
+                    const now = Date.now();
+                    let pinnedMsgFound = false;
 
-                const processedIds = new Set();
+                    const processedIds = new Set();
+                    let processedCount = 0;
 
-                let processedCount = 0;
+                    for (const msg of messages) {
+                        if (msg.expiresAt && msg.expiresAt < now) { DataService.deleteMessage(db, convId, msg.id); continue; }
+                        processedIds.add(msg.id);
 
-                for (const msg of messages) {
-                    if (msg.expiresAt && msg.expiresAt < now) { DataService.deleteMessage(db, convId, msg.id); continue; }
-                    processedIds.add(msg.id);
+                        try {
+                            const existingWrapper = document.getElementById(`msg-bubble-${msg.id}`);
+                            const isEditedNow = !!msg.isEdited;
+                            const wasEditedBefore = existingWrapper ? existingWrapper.getAttribute('data-raw-edited') === 'true' : false;
 
-                    try {
-                        const existingWrapper = document.getElementById(`msg-bubble-${msg.id}`);
-                        const isEditedNow = !!msg.isEdited;
-                        const wasEditedBefore = existingWrapper ? existingWrapper.getAttribute('data-raw-edited') === 'true' : false;
+                            if (existingWrapper && existingWrapper.hasAttribute('data-decrypted-text') && (isEditedNow === wasEditedBefore)) {
+                                const decryptedText = existingWrapper.getAttribute('data-decrypted-text');
+                                
+                                if (msg.id === AppState.pinnedMsgId) { UI.updatePinnedBanner(decryptedText); pinnedMsgFound = true; }
+                                if (convId && msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') { DataService.markMessageRead(db, convId, msg.id); }
 
-                        if (existingWrapper && existingWrapper.hasAttribute('data-decrypted-text') && (isEditedNow === wasEditedBefore)) {
-                            const decryptedText = existingWrapper.getAttribute('data-decrypted-text');
-                            
+                                UI.appendMessage({
+                                    id: msg.id, text: decryptedText, timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(),
+                                    isSelf: msg.senderUid === AppState.currentUser.uid, status: msg.status || 'sent', 
+                                    isEdited: msg.isEdited, reactions: msg.reactions || {}, expiresAt: msg.expiresAt || null
+                                });
+
+                                existingWrapper.setAttribute('data-raw-status', msg.status || 'sent');
+                                existingWrapper.setAttribute('data-raw-reactions', JSON.stringify(msg.reactions||{}));
+                                continue;
+                            }
+
+                            const targetEncryptedAesKey = msg.senderUid === AppState.currentUser.uid ? msg.senderEncryptedAesKey : msg.encryptedAesKey;
+                            let decryptedText = ""; let fileData = null;
+
+                            const cachedMsg = await MessageCacheService.getMessage(msg.id);
+
+                            if (cachedMsg && cachedMsg.ciphertext === msg.ciphertext) {
+                                decryptedText = cachedMsg.text;
+                                fileData = cachedMsg.fileData;
+                            }
+                            else if (targetEncryptedAesKey) {
+                                const rawAesKey = await RSA.decryptData(privateKey, targetEncryptedAesKey);
+                                const aesKey = await AES.importKey(rawAesKey);
+                                
+                                if (msg.type === 'file' || msg.type === 'audio') { 
+                                    decryptedText = "Encrypted Media"; 
+                                    fileData = { ...msg, aesKey: aesKey }; 
+                                } else { 
+                                    decryptedText = await AES.decryptMessage(msg.ciphertext, msg.iv, aesKey); 
+                                }
+                                
+                                await MessageCacheService.saveMessage(msg.id, msg.ciphertext, decryptedText, fileData);
+                            } else { 
+                                decryptedText = "[Legacy Encrypted Message]"; 
+                            }
+
                             if (msg.id === AppState.pinnedMsgId) { UI.updatePinnedBanner(decryptedText); pinnedMsgFound = true; }
-                            if (convId && msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') { DataService.markMessageRead(db, convId, msg.id); }
 
                             UI.appendMessage({
                                 id: msg.id, text: decryptedText, timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(),
-                                isSelf: msg.senderUid === AppState.currentUser.uid, status: msg.status || 'sent', 
-                                isEdited: msg.isEdited, reactions: msg.reactions || {}, expiresAt: msg.expiresAt || null
+                                isSelf: msg.senderUid === AppState.currentUser.uid, status: msg.status || 'sent', fileData: fileData,
+                                isEdited: msg.isEdited, reactions: msg.reactions || {}, expiresAt: msg.expiresAt || null,
+                                rawCrypto: { ciphertext: msg.ciphertext, iv: msg.iv, encryptedAesKey: targetEncryptedAesKey }
                             });
 
-                            existingWrapper.setAttribute('data-raw-status', msg.status || 'sent');
-                            existingWrapper.setAttribute('data-raw-reactions', JSON.stringify(msg.reactions||{}));
-                            continue;
-                        }
-
-                        const targetEncryptedAesKey = msg.senderUid === AppState.currentUser.uid ? msg.senderEncryptedAesKey : msg.encryptedAesKey;
-                        let decryptedText = ""; let fileData = null;
-
-                        const cachedMsg = await MessageCacheService.getMessage(msg.id);
-
-                        if (cachedMsg && cachedMsg.ciphertext === msg.ciphertext) {
-                            decryptedText = cachedMsg.text;
-                            fileData = cachedMsg.fileData;
-                        }
-                        else if (targetEncryptedAesKey) {
-                            const rawAesKey = await RSA.decryptData(privateKey, targetEncryptedAesKey);
-                            const aesKey = await AES.importKey(rawAesKey);
-                            
-                            if (msg.type === 'file' || msg.type === 'audio') { 
-                                decryptedText = "Encrypted Media"; 
-                                fileData = { ...msg, aesKey: aesKey }; 
-                            } else { 
-                                decryptedText = await AES.decryptMessage(msg.ciphertext, msg.iv, aesKey); 
+                            const newlyAppended = document.getElementById(`msg-bubble-${msg.id}`);
+                            if(newlyAppended) {
+                                newlyAppended.setAttribute('data-raw-status', msg.status || 'sent');
+                                newlyAppended.setAttribute('data-raw-reactions', JSON.stringify(msg.reactions||{}));
+                                newlyAppended.setAttribute('data-raw-edited', String(!!msg.isEdited));
+                                newlyAppended.setAttribute('data-decrypted-text', decryptedText);
                             }
-                            
-                            await MessageCacheService.saveMessage(msg.id, msg.ciphertext, decryptedText, fileData);
-                        } else { 
-                            decryptedText = "[Legacy Encrypted Message]"; 
+
+                            if (convId && msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') {
+                                DataService.markMessageRead(db, convId, msg.id);
+                            }
+
+                        } catch (err) {
+                            UI.appendMessage({ id: msg.id, text: "[Decryption Failed]", timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(), isSelf: msg.senderUid === AppState.currentUser.uid, status: 'error' });
                         }
 
-                        if (msg.id === AppState.pinnedMsgId) { UI.updatePinnedBanner(decryptedText); pinnedMsgFound = true; }
-
-                        UI.appendMessage({
-                            id: msg.id, text: decryptedText, timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(),
-                            isSelf: msg.senderUid === AppState.currentUser.uid, status: msg.status || 'sent', fileData: fileData,
-                            isEdited: msg.isEdited, reactions: msg.reactions || {}, expiresAt: msg.expiresAt || null,
-                            rawCrypto: { ciphertext: msg.ciphertext, iv: msg.iv, encryptedAesKey: targetEncryptedAesKey }
-                        });
-
-                        const newlyAppended = document.getElementById(`msg-bubble-${msg.id}`);
-                        if(newlyAppended) {
-                            newlyAppended.setAttribute('data-raw-status', msg.status || 'sent');
-                            newlyAppended.setAttribute('data-raw-reactions', JSON.stringify(msg.reactions||{}));
-                            newlyAppended.setAttribute('data-raw-edited', String(!!msg.isEdited));
-                            newlyAppended.setAttribute('data-decrypted-text', decryptedText);
-                        }
-
-                        if (convId && msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') {
-                            DataService.markMessageRead(db, convId, msg.id);
-                        }
-
-                    } catch (err) {
-                        UI.appendMessage({ id: msg.id, text: "[Decryption Failed]", timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(), isSelf: msg.senderUid === AppState.currentUser.uid, status: 'error' });
-                    }
-
-                    processedCount++;
-                    if (processedCount % 15 === 0) {
-                        await new Promise(resolve => setTimeout(resolve, 1));
-                    }
-                }
-                if(!pinnedMsgFound) UI.updatePinnedBanner(null);
-
-                const allBubbles = list.querySelectorAll('.msg-bubble-wrapper');
-                allBubbles.forEach(bubble => {
-                    const id = bubble.id.replace('msg-bubble-', '');
-                    if (!processedIds.has(id)) bubble.remove();
-                });
-
-                list.querySelectorAll('.date-separator').forEach(el => el.remove());
-                const currentBubbles = Array.from(list.querySelectorAll('.msg-bubble-wrapper'));
-                let currentLastDate = null;
-                currentBubbles.forEach(bubble => {
-                    const timestamp = parseInt(bubble.getAttribute('data-timestamp') || '0');
-                    if (timestamp) {
-                        const msgDate = new Date(timestamp);
-                        const today = new Date();
-                        const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-                        let dateString = msgDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                        if (msgDate.toDateString() === today.toDateString()) dateString = "Today";
-                        else if (msgDate.toDateString() === yesterday.toDateString()) dateString = "Yesterday";
-
-                        if (dateString !== currentLastDate) {
-                            const separator = document.createElement('div');
-                            separator.className = 'date-separator flex justify-center my-4 animate-slide-up w-full shrink-0';
-                            separator.innerHTML = `<span class="px-3 py-1 bg-gray-800 border border-gray-700 rounded-lg text-[10px] sm:text-xs text-gray-400 font-medium tracking-wide uppercase shadow-sm">${dateString}</span>`;
-                            list.insertBefore(separator, bubble);
-                            currentLastDate = dateString;
+                        processedCount++;
+                        if (processedCount % 15 === 0) {
+                            await new Promise(r => setTimeout(r, 1));
                         }
                     }
-                });
+                    if(!pinnedMsgFound) UI.updatePinnedBanner(null);
 
-                if (AppState.chatInitialLoad) {
-                    AppState.chatInitialLoad = false;
-                    
-                    if (AppState.currentUnreadCount > 0) {
-                        const allBubblesArray = Array.from(list.querySelectorAll('.msg-bubble-wrapper'));
-                        const unreadMsgs = allBubblesArray.slice(-AppState.currentUnreadCount);
-                        
-                        if (unreadMsgs.length > 0) {
-                            const separator = document.createElement('div');
-                            separator.id = 'new-messages-separator';
-                            separator.className = 'flex justify-center my-6 w-full shrink-0 z-10';
-                            separator.innerHTML = `<span class="px-4 py-1.5 bg-falconix-primary/10 border border-falconix-primary/30 rounded-full text-[11px] text-falconix-primary font-bold tracking-widest uppercase shadow-sm backdrop-blur-md">↓ ${AppState.currentUnreadCount} New Messages ↓</span>`;
-                            list.insertBefore(separator, unreadMsgs[0]);
-                            
-                            separator.scrollIntoView({ behavior: 'instant', block: 'center' });
-                        }
-                    } else {
-                        list.scrollTop = list.scrollHeight;
-                    }
-                    
-                    requestAnimationFrame(() => {
-                        list.style.transition = 'opacity 0.3s ease-out';
-                        list.style.opacity = '1';
+                    const allBubbles = list.querySelectorAll('.msg-bubble-wrapper');
+                    allBubbles.forEach(bubble => {
+                        const id = bubble.id.replace('msg-bubble-', '');
+                        if (!processedIds.has(id)) bubble.remove();
                     });
-                } else {
-                    const isNearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 250;
-                    if (isNearBottom || messages[messages.length - 1]?.senderUid === AppState.currentUser.uid) {
-                        list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
-                    }
-                }
-            }
 
+                    list.querySelectorAll('.date-separator').forEach(el => el.remove());
+                    const currentBubbles = Array.from(list.querySelectorAll('.msg-bubble-wrapper'));
+                    let currentLastDate = null;
+                    currentBubbles.forEach(bubble => {
+                        const timestamp = parseInt(bubble.getAttribute('data-timestamp') || '0');
+                        if (timestamp) {
+                            const msgDate = new Date(timestamp);
+                            const today = new Date();
+                            const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+                            let dateString = msgDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                            if (msgDate.toDateString() === today.toDateString()) dateString = "Today";
+                            else if (msgDate.toDateString() === yesterday.toDateString()) dateString = "Yesterday";
+
+                            if (dateString !== currentLastDate) {
+                                const separator = document.createElement('div');
+                                separator.className = 'date-separator flex justify-center my-4 animate-slide-up w-full shrink-0';
+                                separator.innerHTML = `<span class="px-3 py-1 bg-gray-800 border border-gray-700 rounded-lg text-[10px] sm:text-xs text-gray-400 font-medium tracking-wide uppercase shadow-sm">${dateString}</span>`;
+                                list.insertBefore(separator, bubble);
+                                currentLastDate = dateString;
+                            }
+                        }
+                    });
+
+                    if (AppState.chatInitialLoad) {
+                        AppState.chatInitialLoad = false;
+                        
+                        if (AppState.currentUnreadCount > 0) {
+                            const allBubblesArray = Array.from(list.querySelectorAll('.msg-bubble-wrapper'));
+                            const unreadMsgs = allBubblesArray.slice(-AppState.currentUnreadCount);
+                            
+                            if (unreadMsgs.length > 0) {
+                                const separator = document.createElement('div');
+                                separator.id = 'new-messages-separator';
+                                separator.className = 'flex justify-center my-6 w-full shrink-0 z-10';
+                                separator.innerHTML = `<span class="px-4 py-1.5 bg-falconix-primary/10 border border-falconix-primary/30 rounded-full text-[11px] text-falconix-primary font-bold tracking-widest uppercase shadow-sm backdrop-blur-md">↓ ${AppState.currentUnreadCount} New Messages ↓</span>`;
+                                list.insertBefore(separator, unreadMsgs[0]);
+                                
+                                separator.scrollIntoView({ behavior: 'instant', block: 'center' });
+                            }
+                        } else {
+                            list.scrollTop = list.scrollHeight;
+                        }
+                        
+                        requestAnimationFrame(() => {
+                            list.style.transition = 'opacity 0.3s ease-out';
+                            list.style.opacity = '1';
+                            resolve();
+                        });
+                    } else {
+                        const isNearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 250;
+                        if (isNearBottom || messages[messages.length - 1]?.senderUid === AppState.currentUser.uid) {
+                            list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
+                        }
+                        resolve();
+                    }
+                });
+            }
         };
 
         const CallService = {
