@@ -815,7 +815,7 @@
 
                     const processedIds = new Set();
                     let processedCount = 0;
-
+                    let previousWrapper = null;
                     for (const msg of messages) {
                         if (msg.expiresAt && msg.expiresAt < now) { DataService.deleteMessage(db, convId, msg.id); continue; }
                         processedIds.add(msg.id);
@@ -1331,7 +1331,9 @@
                 list.onscroll = null; 
                 
                 list.onscroll = () => {
-                    if (list.scrollTop === 0 && !AppState.isFetchingMore && messages.length >= AppState.messageLimit) {
+                    const currentMessageCount = list.querySelectorAll('.msg-bubble-wrapper').length;
+                    
+                    if (list.scrollTop <= 5 && !AppState.isFetchingMore && currentMessageCount >= AppState.messageLimit) {
                         AppState.isFetchingMore = true;
                         
                         const previousScrollHeight = list.scrollHeight;
@@ -1574,7 +1576,19 @@
                     };
 
                     wrapper.addEventListener('touchend', resetSwipe); wrapper.addEventListener('touchcancel', resetSwipe);
-                    list.appendChild(wrapper);
+                    if (previousWrapper) {
+                                previousWrapper.after(wrapper);
+                            } else {
+                                const secBanner = document.getElementById('security-banner-msg');
+                                if (secBanner) secBanner.after(wrapper);
+                                else list.prepend(wrapper);
+                            }
+                        }
+                        
+                        previousWrapper = wrapper;
+
+                        if (msg.fileData) {
+                            const decryptBtn = wrapper.querySelector(`#btn-decrypt-${msg.id}`);
                 }
 
                 if (msg.fileData) {
