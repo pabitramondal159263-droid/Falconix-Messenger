@@ -751,7 +751,10 @@
                         const existingWrapper = document.getElementById(`msg-bubble-${msg.id}`);
                         if (existingWrapper && existingWrapper.getAttribute('data-raw-status') === (msg.status || 'sent') && existingWrapper.getAttribute('data-raw-reactions') === JSON.stringify(msg.reactions||{}) && existingWrapper.getAttribute('data-raw-edited') === String(!!msg.isEdited)) {
                             if (msg.id === AppState.pinnedMsgId) { pinnedMsgFound = true; UI.updatePinnedBanner(existingWrapper.getAttribute('data-decrypted-text') || ''); }
-                            if (activeConvId === convId && msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') DataService.markMessageRead(db, convId, msg.id);
+                            
+                            if (convId && msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') {
+                                DataService.markMessageRead(db, convId, msg.id);
+                            }
                             continue;
                         }
 
@@ -779,8 +782,9 @@
                             newlyAppended.setAttribute('data-decrypted-text', decryptedText);
                         }
 
-                        const activeConvId = AppState.selectedUser ? Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid) : null;
-                        if (activeConvId === convId && msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') DataService.markMessageRead(db, convId, msg.id);
+                        if (convId && msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') {
+                            DataService.markMessageRead(db, convId, msg.id);
+                        }
                     } catch (err) {
                         UI.appendMessage({ id: msg.id, text: "[Decryption Failed]", timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(), isSelf: msg.senderUid === AppState.currentUser.uid, status: 'error' });
                     }
