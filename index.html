@@ -1300,7 +1300,9 @@
                 this.openMobileChat(); this.updateChatHeader(user); this.updateInputState(user);
                 
                 if (user.uid !== AppState.currentUser.uid && !user.isVault) {
-                    try { updateDoc(doc(db, FIREBASE_PATHS.USERS, user.uid), { profileViews: increment(1) }); } catch(e) {}
+                    updateDoc(doc(db, FIREBASE_PATHS.USERS, user.uid), { 
+                        profileViews: increment(1) 
+                    }).catch(err => { console.warn("Could not increment profile views", err); });
                 }
                 
                 const convId = Helpers.getConversationId(AppState.currentUser.uid, user.uid);
