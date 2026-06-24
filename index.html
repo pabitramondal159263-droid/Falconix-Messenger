@@ -751,7 +751,7 @@
                         const existingWrapper = document.getElementById(`msg-bubble-${msg.id}`);
                         if (existingWrapper && existingWrapper.getAttribute('data-raw-status') === (msg.status || 'sent') && existingWrapper.getAttribute('data-raw-reactions') === JSON.stringify(msg.reactions||{}) && existingWrapper.getAttribute('data-raw-edited') === String(!!msg.isEdited)) {
                             if (msg.id === AppState.pinnedMsgId) { pinnedMsgFound = true; UI.updatePinnedBanner(existingWrapper.getAttribute('data-decrypted-text') || ''); }
-                            if (msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') DataService.markMessageRead(db, convId, msg.id);
+                            if (activeConvId === convId && msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') DataService.markMessageRead(db, convId, msg.id);
                             continue;
                         }
 
@@ -779,7 +779,8 @@
                             newlyAppended.setAttribute('data-decrypted-text', decryptedText);
                         }
 
-                        if (msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') DataService.markMessageRead(db, convId, msg.id);
+                        const activeConvId = AppState.selectedUser ? Helpers.getConversationId(AppState.currentUser.uid, AppState.selectedUser.uid) : null;
+                        if (activeConvId === convId && msg.senderUid !== AppState.currentUser.uid && msg.status !== 'read') DataService.markMessageRead(db, convId, msg.id);
                     } catch (err) {
                         UI.appendMessage({ id: msg.id, text: "[Decryption Failed]", timestamp: msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date(), isSelf: msg.senderUid === AppState.currentUser.uid, status: 'error' });
                     }
@@ -959,7 +960,13 @@
             closeMobileChat() {
                 const sidebar = document.getElementById('app-sidebar'); const chatArea = document.getElementById('app-chat-area');
                 if(sidebar && chatArea) { sidebar.classList.remove('hidden', 'sm:flex'); sidebar.classList.add('flex'); chatArea.classList.remove('flex', 'w-full'); chatArea.classList.add('hidden', 'sm:flex'); }
-                AppState.selectedUser = null; this.clearInputBanners(); Router.navigate('app');
+                
+                if (AppState.unsubscribeConv) { AppState.unsubscribeConv(); AppState.unsubscribeConv = null; }
+                if (AppState.unsubscribeMessages) { AppState.unsubscribeMessages(); AppState.unsubscribeMessages = null; }
+                
+                AppState.selectedUser = null; 
+                this.clearInputBanners(); 
+                Router.navigate('app');
             },
 
             updateInputState(user) {
@@ -1126,13 +1133,16 @@
                 document.getElementById('chat-message-list').innerHTML = `<div id="loading-spinner" class="flex items-center justify-center h-full"><div class="animate-pulse flex flex-col items-center"><div class="w-8 h-8 border-4 border-falconix-primary border-t-transparent rounded-full animate-spin mb-4"></div><p class="text-sm text-gray-400">Decrypting secure channel...</p></div></div>`;
 
                 DataService.startConversationListener(db, convId, (data) => {
-                    const isRecentlyTyping = data && data.typing && data.typing[user.uid] && (Date.now() - data.typing[user.uid]) < 3000;
-                    this.updateChatHeader(user, !!isRecentlyTyping);
-                    if (data && data.disappearing !== undefined) AppState.disappearingTimerMs = data.disappearing; else AppState.disappearingTimerMs = 0;
-                    this.updateDisappearingBanner();
-                    if(data && data.pinnedMsgId) AppState.pinnedMsgId = data.pinnedMsgId; else { AppState.pinnedMsgId = null; this.updatePinnedBanner(null); }
-                    if (data && data[`unread_${AppState.currentUser.uid}`] > 0) {
-                        updateDoc(doc(db, FIREBASE_PATHS.CONVERSATIONS, convId), { [`unread_${AppState.currentUser.uid}`]: 0 }).catch(()=>{});
+                    if (AppState.selectedUser && AppState.selectedUser.uid === user.uid) {
+                        const isRecentlyTyping = data && data.typing && data.typing[user.uid] && (Date.now() - data.typing[user.uid]) < 3000;
+                        this.updateChatHeader(user, !!isRecentlyTyping);
+                        if (data && data.disappearing !== undefined) AppState.disappearingTimerMs = data.disappearing; else AppState.disappearingTimerMs = 0;
+                        this.updateDisappearingBanner();
+                        if(data && data.pinnedMsgId) AppState.pinnedMsgId = data.pinnedMsgId; else { AppState.pinnedMsgId = null; this.updatePinnedBanner(null); }
+                        
+                        if (data && data[`unread_${AppState.currentUser.uid}`] > 0) {
+                            updateDoc(doc(db, FIREBASE_PATHS.CONVERSATIONS, convId), { [`unread_${AppState.currentUser.uid}`]: 0 }).catch(()=>{});
+                        }
                     }
                 });
 
@@ -2145,52 +2155,74 @@
                 }
             });
 
-            document.addEventListener('visibilitychange', () => { if (AppState.currentUser) DataService.updatePresence(db, AppState.currentUser.uid, document.visibilityState === 'visible'); });
-            window.addEventListener('beforeunload', () => { if (AppState.currentUser) DataService.updatePresence(db, AppState.currentUser.uid, false); });
+            setInterval(() => {
+                if (AppState.currentUser && document.visibilityState === 'visible') {
+                    DataService.updatePresence(db, AppState.currentUser.uid, true);
+                }
+            }, 30000);
+
+            document.addEventListener('visibilitychange', () => { 
+                if (AppState.currentUser) {
+                    DataService.updatePresence(db, AppState.currentUser.uid, document.visibilityState === 'visible'); 
+                }
+            });
+            window.addEventListener('beforeunload', () => { 
+                if (AppState.currentUser) DataService.updatePresence(db, AppState.currentUser.uid, false); 
+            });
+            window.addEventListener('pagehide', () => { 
+                if (AppState.currentUser) DataService.updatePresence(db, AppState.currentUser.uid, false); 
+            });
             
             document.getElementById('btn-dp-chat')?.addEventListener('click', () => {
                 if(window.activeDpUser) {
+                    const u = window.activeDpUser;
                     UI.hideDpQuickModal();
-                    Router.navigate(`app/chat/${window.activeDpUser.uid}`);
+                    Router.navigate(`app/chat/${u.uid}`);
                 }
             });
             document.getElementById('btn-dp-call')?.addEventListener('click', () => {
                 if(window.activeDpUser) {
+                    const u = window.activeDpUser;
                     UI.hideDpQuickModal();
-                    UI.selectUser(window.activeDpUser);
+                    UI.selectUser(u);
                     CallService.initCall(false);
                 }
             });
             document.getElementById('btn-dp-video')?.addEventListener('click', () => {
                 if(window.activeDpUser) {
+                    const u = window.activeDpUser;
                     UI.hideDpQuickModal();
-                    UI.selectUser(window.activeDpUser);
+                    UI.selectUser(u);
                     CallService.initCall(true);
                 }
             });
             document.getElementById('btn-dp-info')?.addEventListener('click', () => {
                 if(window.activeDpUser) {
+                    const u = window.activeDpUser;
                     UI.hideDpQuickModal();
-                    UI.showContactProfile(window.activeDpUser);
+                    UI.showContactProfile(u);
                 }
             });
             document.getElementById('btn-cp-chat')?.addEventListener('click', () => {
                 if(window.activeProfileUser) {
+                    const u = window.activeProfileUser;
                     UI.hideContactProfile();
-                    Router.navigate(`app/chat/${window.activeProfileUser.uid}`);
+                    Router.navigate(`app/chat/${u.uid}`);
                 }
             });
             document.getElementById('btn-cp-audio')?.addEventListener('click', () => {
                 if(window.activeProfileUser) {
+                    const u = window.activeProfileUser;
                     UI.hideContactProfile();
-                    UI.selectUser(window.activeProfileUser);
+                    UI.selectUser(u);
                     CallService.initCall(false);
                 }
             });
             document.getElementById('btn-cp-video')?.addEventListener('click', () => {
                 if(window.activeProfileUser) {
+                    const u = window.activeProfileUser;
                     UI.hideContactProfile();
-                    UI.selectUser(window.activeProfileUser);
+                    UI.selectUser(u);
                     CallService.initCall(true);
                 }
             });
@@ -2530,8 +2562,6 @@
             </section>
         </div>
     </main>
-
-
 
     <div id="identity-restore-modal" class="fixed inset-0 z-[250] bg-falconix-dark/95 backdrop-blur-xl hidden flex-col items-center justify-center transition-all duration-300 p-4">
         <div class="w-full max-w-md bg-gray-900 border border-white/10 rounded-3xl shadow-2xl p-8 text-center animate-slide-up flex flex-col max-h-[85vh] overflow-y-auto custom-scrollbar">
